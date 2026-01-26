@@ -47,7 +47,17 @@ class _LoginPageState extends State<LoginPage> {
           final data = responseData['data'];
           prefs.setString('user_role', data['rol'].toString());
           prefs.setString('user_name', data['nombre']);
-          prefs.setString('user_photo', data['foto'] ?? '');
+          prefs.setString('user_photo', data['foto'] ?? 'user.png');
+          prefs.setString('user_id', data['id'].toString());
+          
+
+
+            print('Datos recibidos del login:');
+            print('ID: ${data['id']}');
+            print('Rol: ${data['rol']}');
+            print('Nombre: ${data['nombre']}');
+            print('Foto: ${data['foto']}');
+            
 
           if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomePage()));
         } else {

@@ -5,6 +5,7 @@ import '../core/app_colors.dart';
 import '../molecules/stat_card.dart';
 import '../molecules/dolar_indicator.dart';
 import '../models/dolar_model.dart';
+import '../pages/driver_page.dart'; // <--- IMPORTAR LA PÁGINA DEL CHOFER
 
 class DashboardContent extends StatefulWidget {
   final String userName;
@@ -78,13 +79,7 @@ class _DashboardContentState extends State<DashboardContent> {
                     ),
                   ),
                   const SizedBox(width: 15),
-                  Expanded(
-                    child: DolarIndicator(
-                      title: "USDT", 
-                      dolar: DolarModel.fromJson(dolarData!['usdt'] as Map<String, dynamic>), // Y AQUÍ
-                      backgroundColor: AppColors.primaryColor,
-                    ),
-                  ),
+                
                 ],
               ),
             ),
@@ -112,16 +107,14 @@ class _DashboardContentState extends State<DashboardContent> {
           ] else if (widget.userRole == '5') ...[
             // --- CHOFER (SOLO VE RUTAS) ---
             StatCard(
-              title: 'Rutas Hoy', 
-              value: 'Ver Mis Rutas', // Placeholder texto
+              title: 'Viajes Asignados', 
+              value: 'Ver Mis viajes', // Placeholder texto
               icon: Icons.local_shipping, 
               iconColor: Colors.greenAccent,
               onTap: () {
-                // Aquí irá la navegación a la página de rutas
-                // Navigator.push(..., DriverRoutesPage());
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Navegando a Mis Rutas (Chofer)...')),
-                );
+                 Navigator.push(context, MaterialPageRoute(
+                    builder: (context) => const DriverPage()
+                  ));
               },
             ),
           ] else ...[
