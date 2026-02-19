@@ -4,13 +4,13 @@ import 'package:flutter/material.dart';
 class ScannerControls extends StatelessWidget {
   final bool isFlashOn;
   final VoidCallback onToggleFlash;
-  final VoidCallback onToggleCamera;
+ // final VoidCallback onToggleCamera;
   
   const ScannerControls({
     super.key,
     required this.isFlashOn,
     required this.onToggleFlash,
-    required this.onToggleCamera,
+    //required this.onToggleCamera,
   });
 
   @override
@@ -24,11 +24,11 @@ class ScannerControls extends StatelessWidget {
           onPressed: onToggleFlash,
         ),
         const SizedBox(width: 20),
-        _buildControlButton(
+       /* _buildControlButton(
           icon: Icons.cameraswitch,
           label: 'Cambiar Cámara',
           onPressed: onToggleCamera,
-        ),
+        ),*/
       ],
     );
   }

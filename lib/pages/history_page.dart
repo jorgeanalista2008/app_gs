@@ -229,13 +229,13 @@ class _HistoryPageState extends State<HistoryPage> {
           
           // Información principal
           _buildDetalleItem('📦 Lote', entrega.loteId),
-          _buildDetalleItem('📋 Paquete', entrega.producto),
+         // _buildDetalleItem('📋 Paquete', entrega.producto),
           _buildDetalleItem('👤 Cliente', entrega.cliente),
           _buildDetalleItem('📅 Fecha', entrega.fechaFormateada),
           _buildDetalleItem('📍 Estado', entrega.estado),
           
-          if (entrega.cantidad > 1) 
-            _buildDetalleItem('🔢 Cantidad', entrega.cantidad.toString()),
+          if (entrega.cantidad >= 1) 
+            _buildDetalleItem('🔢 Bultos', entrega.cantidad.toString()),
           
           if (entrega.observaciones.isNotEmpty)
             _buildDetalleItem('📝 Observaciones', entrega.observaciones),
