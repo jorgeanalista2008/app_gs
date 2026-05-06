@@ -31,7 +31,7 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
 
     try {
-      final url = Uri.parse('https://app.grupo-solsumed.com/admin/index.php?action=mlogin');
+      final url = Uri.parse('https://192.168.0.217/admin/index.php?action=mlogin');
       final response = await http.post(
         url,
         body: jsonEncode({'email': usuario, 'password': password}),
