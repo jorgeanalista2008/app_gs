@@ -81,8 +81,8 @@ class _BillingContentState extends State<BillingContent> {
         // --- 3. ACTUALIZAR FILTROS ---
     void _updateFilters(int? newYear, int? newMonth) {
       setState(() {
-        if (newYear != null) selectedYear = newYear!;
-        if (newMonth != null) selectedMonth = newMonth!;
+        if (newYear != null) selectedYear = newYear;
+        if (newMonth != null) selectedMonth = newMonth;
       });
       // REFRESCAR DATOS CON LOS NUEVOS FILTROS
       _fetchBillingData(selectedYear, selectedMonth);

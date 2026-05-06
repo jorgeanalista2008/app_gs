@@ -1,10 +1,12 @@
 // repositories/lot_repository.dart - VERSIÓN CORREGIDA
 import 'dart:convert';
 import 'package:app_gs/models/delivery_history_model.dart';
+
 import 'package:http/http.dart' as http;
+import '../core/env.dart';
 
 class LotRepository {
-  static const String _baseUrl = 'https://app.grupo-solsumed.com/admin';
+  static const String _baseUrl = Env.apiBaseUrl;
   
   // Método para obtener detalles del lote (ya funciona)
   Future<Map<String, dynamic>> getLotDetails({
@@ -308,7 +310,7 @@ Future<List<DeliveryHistory>> getDeliveryHistoryFromPackages({
                 id: paquete['id']?.toString() ?? '0',
                 loteId: paquete['co_lote']?.toString() ?? '',
                 paqueteId: paquete['id']?.toString() ?? '0',
-                cliente: paquete['cli_des']?.toString()?.trim() ?? 'Cliente no especificado',
+                cliente: paquete['cli_des']?.toString().trim() ?? 'Cliente no especificado',
                 producto: 'Paquete ${paquete['numero_paquete']?.toString() ?? '1'}',
                 cantidad: paquete['numero_paquete'] != null 
                     ? int.tryParse(paquete['numero_paquete'].toString()) ?? 1 

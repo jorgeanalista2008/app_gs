@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../core/app_colors.dart';
 import '../models/shipment_model.dart';
 
 class ShipmentRow extends StatelessWidget {

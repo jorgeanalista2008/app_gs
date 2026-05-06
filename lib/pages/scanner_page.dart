@@ -12,7 +12,6 @@ import '../molecules/scanner_controls.dart';
 import '../molecules/image_scan_fab.dart';
 import '../core/app_colors.dart';
 import 'dart:async';
-import 'dart:math' show min;
 
 class ScannerPage extends StatefulWidget {
   const ScannerPage({super.key});

@@ -6,6 +6,7 @@ import '../core/app_colors.dart';
 import '../atoms/app_button.dart';
 import '../atoms/app_text_field.dart';
 import 'home_page.dart';
+import '../core/env.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -29,50 +30,46 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     setState(() => _isLoading = true);
+try {
+  final url = Uri.parse('${Env.apiBaseUrl}/auth/login');
+  final response = await http.post(
+    url,
+    body: jsonEncode({'identifier': usuario, 'password': password}),
+    headers: {'Content-Type': 'application/json'},
+  );
 
-    try {
-      final url = Uri.parse('https://192.168.0.217/admin/index.php?action=mlogin');
-      final response = await http.post(
-        url,
-        body: jsonEncode({'email': usuario, 'password': password}),
-        headers: {'Content-Type': 'application/json'},
-      );
+  setState(() => _isLoading = false);
 
-      setState(() => _isLoading = false);
+  if (response.statusCode == 200) {
+    final responseData = jsonDecode(response.body);
+    if (responseData['status'] == 'success') {
+      final prefs = await SharedPreferences.getInstance();
+      final data = responseData['data'];
+      prefs.setString('user_role', data['rol'].toString());
+      prefs.setString('user_name', data['nombre']);
+      prefs.setString('user_photo', data['foto'] ?? 'user.png');
+      prefs.setString('user_id', data['id'].toString());
+      print('Datos guardados en SharedPreferences:'); 
+      print('Datos recibidos del login:');
+      print('ID: ${data['id']}');
+      print('Rol: ${data['rol']}');
+      print('Nombre: ${data['nombre']}');
+      print('Foto: ${data['foto']}');
 
-      if (response.statusCode == 200) {
-        final responseData = jsonDecode(response.body);
-        if (responseData['status'] == 'success') {
-          final prefs = await SharedPreferences.getInstance();
-          final data = responseData['data'];
-          prefs.setString('user_role', data['rol'].toString());
-          prefs.setString('user_name', data['nombre']);
-          prefs.setString('user_photo', data['foto'] ?? 'user.png');
-          prefs.setString('user_id', data['id'].toString());
-          
-
-
-            print('Datos recibidos del login:');
-            print('ID: ${data['id']}');
-            print('Rol: ${data['rol']}');
-            print('Nombre: ${data['nombre']}');
-            print('Foto: ${data['foto']}');
-            
-
-          if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomePage()));
-        } else {
-          String mensaje = responseData['message'] ?? 'Error desconocido';
-          if (mensaje.contains("desactivado")) mensaje = "Su cuenta está desactivada.";
-          if (mensaje.contains("incorrectos")) mensaje = "Usuario o contraseña incorrectos.";
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensaje), backgroundColor: AppColors.errorColor));
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error de comunicación con el servidor.')));
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomePage()));
+    } else {
+      String mensaje = responseData['message'] ?? 'Error desconocido';
+      if (mensaje.contains("desactivado")) mensaje = "Su cuenta está desactivada.";
+      if (mensaje.contains("incorrectos")) mensaje = "Usuario o contraseña incorrectos.";
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensaje), backgroundColor: AppColors.errorColor));
     }
+  } else {
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error de comunicación con el servidor.')));
+  }
+} catch (e) {
+  setState(() => _isLoading = false);
+  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+}
   }
 
   @override

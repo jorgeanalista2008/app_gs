@@ -1,5 +1,4 @@
 // molecules/image_scan_fab.dart - VERSIÓN CORREGIDA
-import 'dart:io';
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 

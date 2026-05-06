@@ -36,7 +36,7 @@ class SalesChartWidget extends StatelessWidget {
           titlesData: FlTitlesData(
             leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 30, getTitlesWidget: (val, meta) {
               // Formato simple para eje Y
-              return Text(val.toInt() > 999 ? (val/1000).toStringAsFixed(0)+"k" : val.toInt().toString(), style: const TextStyle(fontSize: 10, color: Colors.grey));
+              return Text(val.toInt() > 999 ? "${(val/1000).toStringAsFixed(0)}k" : val.toInt().toString(), style: const TextStyle(fontSize: 10, color: Colors.grey));
             })),
             bottomTitles: AxisTitles(
               sideTitles: SideTitles(

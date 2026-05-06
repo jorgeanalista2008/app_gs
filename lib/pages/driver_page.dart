@@ -1,7 +1,7 @@
 import 'package:app_gs/core/app_colors.dart';
 import 'package:flutter/material.dart';
 import '../organisms/driver_routes_content.dart'; // Importa el Organismo que acabamos de crear
-import '../pages/login_page.dart';       // Importa tu página de Login
+// Importa tu página de Login
 
 class DriverPage extends StatelessWidget {
   const DriverPage({super.key});

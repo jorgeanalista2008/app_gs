@@ -127,7 +127,7 @@ class _ManagerDashboardContentState extends State<ManagerDashboardContent> {
             amount: tx.amount,
             status: tx.status,
             isPositive: tx.status == 'Completado',
-          )).toList(),
+          )),
           
           const SizedBox(height: 20),
         ],

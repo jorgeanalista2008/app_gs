@@ -1,6 +1,5 @@
 // lib/features/scanner/atoms/status_badge.dart
 import 'package:flutter/material.dart';
-import '../../../core/app_colors.dart';
 
 class StatusBadge extends StatelessWidget {
   final String status;

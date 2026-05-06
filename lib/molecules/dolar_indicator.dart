@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../core/app_colors.dart';
 import '../models/dolar_model.dart';
 
 // Ahora es StatelessWidget (recibe datos, no los busca)

@@ -92,7 +92,7 @@ class LotDetailCard extends StatelessWidget {
               ),
             ],
             
-            if (lot.observaciones != null && lot.observaciones!.isNotEmpty) ...[
+            if (lot.observaciones.isNotEmpty) ...[
               const SizedBox(height: 16),
               const Text(
                 'Observaciones:',
@@ -103,7 +103,7 @@ class LotDetailCard extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                lot.observaciones!,
+                lot.observaciones,
                 style: const TextStyle(color: Colors.grey),
               ),
             ],
