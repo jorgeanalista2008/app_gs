@@ -6,12 +6,15 @@ import '../pages/profile_page.dart';
 import '../pages/manager_dashboard_page.dart';
 import '../pages/billing_page.dart';
 import '../pages/product_ranking_page.dart';
-import '../pages/driver_page.dart'; // <--- IMPORTAR LA PÁGINA DEL CHOFER
+import '../pages/driver_page.dart';
+import '../pages/clientes_page.dart';
+import '../pages/articulos_page.dart';
 
 class AppDrawer extends StatelessWidget {
   final String userName;
   final String? userRole;
   final String? userPhoto;
+  final String? userEmail;
   final VoidCallback onLogout;
   final VoidCallback onScanPressed;
 
@@ -20,157 +23,194 @@ class AppDrawer extends StatelessWidget {
     required this.userName,
     required this.userRole,
     required this.userPhoto,
+    required this.userEmail,
     required this.onLogout,
     required this.onScanPressed,
   });
 
+  // Mapeo de roles por nombre
   String _getRoleName(String? role) {
-    switch (role) {
-      case '1': return 'Administrador';
-      case '2': return 'Vendedor';
-      case '3': return 'Gerente';
-      case '4': return 'Cliente';
-      case '5': return 'Chofer';
-      case '6': return 'Jefe de Almacén';
-      default: return 'Usuario';
+    switch (role?.toLowerCase()) {
+      case 'superadmin': return 'Administrador';
+      case 'vendedor': return 'Vendedor';
+      case 'gerente': return 'Gerente';
+      case 'cliente': return 'Cliente';
+      case 'chofer': return 'Chofer';
+      case 'jefe de almacén': return 'Jefe de Almacén';
+      default: return role ?? 'Usuario';
     }
   }
 
+  // Helpers como MÉTODOS que reciben el rol
+  bool _isAdmin(String? role) => role?.toLowerCase() == 'superadmin';
+  bool _isGerente(String? role) => role?.toLowerCase() == 'gerente';
+  bool _isVendedor(String? role) => role?.toLowerCase() == 'vendedor';
+  bool _isChofer(String? role) => role?.toLowerCase() == 'chofer';
+  bool _isAdminOrGerente(String? role) => _isAdmin(role) || _isGerente(role);
+  bool _isAdminOrChofer(String? role) => _isAdmin(role) || _isChofer(role);
+
   @override
   Widget build(BuildContext context) {
+    // Guardar en variables locales para usar en el build
+    final rol = userRole;
+    print('=== APP DRAWER ===');
+  print('userRole: $userRole');
+  print('isAdmin: ${_isAdmin(userRole)}');
+  print('isVendedor: ${_isVendedor(userRole)}');
+  print('isGerente: ${_isGerente(userRole)}');
     return Drawer(
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
+          // Header con datos del usuario
           UserAccountsDrawerHeader(
-            accountName: Text(userName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            accountEmail: Text(_getRoleName(userRole)),
-            currentAccountPicture: AvatarWidget(name: userName, photoUrl: userPhoto),
+            accountName: Text(
+              userName,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            accountEmail: Text(_getRoleName(rol)),
+            currentAccountPicture: AvatarWidget(
+              name: userName,
+              photoUrl: userPhoto,
+            ),
             decoration: const BoxDecoration(color: AppColors.primaryColor),
           ),
-          
-          // Opción: Dashboard (Home)
+
+          // Dashboard (Home) - Para todos
           ListTile(
             leading: const Icon(Icons.dashboard, color: AppColors.primaryColor),
             title: const Text('Dashboard'),
             onTap: () => Navigator.pop(context),
           ),
-          
-          // Opción: Escanear QR (para Admin y Chofer)
-          if (userRole == '1' || userRole == '5')
-           ListTile(
-            leading: const Icon(Icons.qr_code_scanner, color: AppColors.primaryColor),
-            title: const Text('Escanear Códigos'),
-            onTap: () {
-               Navigator.pop(context);
-               onScanPressed();
-            },
-          ),
-          
-          // PERFIL (para todos los roles)
+
+          // Escanear QR - Admin y Chofer
+          if (_isAdminOrChofer(rol))
+            ListTile(
+              leading: const Icon(Icons.qr_code_scanner, color: AppColors.primaryColor),
+              title: const Text('Escanear Códigos'),
+              onTap: () {
+                Navigator.pop(context);
+                onScanPressed();
+              },
+            ),
+
+          // Mi Perfil - Para todos
           ListTile(
             leading: const Icon(Icons.person_outline, color: AppColors.primaryColor),
             title: const Text('Mi Perfil'),
             onTap: () {
               Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(
-                builder: (context) => const ProfilePage()
-              ));
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ProfilePage()),
+              );
             },
           ),
-          
-          // MIS RUTAS (EXCLUSIVO PARA CHOFER - Rol 5)
-        /*  if (userRole == '5')
+
+          // Clientes - Admin, Gerente, Vendedor
+          if (_isAdmin(rol) || _isGerente(rol) || _isVendedor(rol))
             ListTile(
-              leading: const Icon(Icons.route, color: Colors.blueAccent), // Icono específico para rutas
-              title: const Text('Mis Rutas'),
+              leading: const Icon(Icons.people, color: AppColors.primaryColor),
+              title: const Text('Clientes'),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(
-                  builder: (context) => const DriverPage() // <--- NAVEGAR A LA PÁGINA DEL CHOFER
-                ));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ClientesPage()),
+                );
               },
-            ),*/
-          
-          // Opción alternativa si quieres mantener la opción "Mis Rutas" donde estaba
-          // (La opción anterior ya está en el menú pero sin navegación):
-          if (userRole == '5')
+            ),
+
+        
+
+          // Mis Viajes - Exclusivo Chofer
+          if (_isChofer(rol))
             ListTile(
               leading: const Icon(Icons.local_shipping, color: AppColors.primaryColor),
               title: const Text('Mis viajes'),
               subtitle: const Text('Ver mis entregas asignadas'),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(
-                  builder: (context) => const DriverPage()
-                ));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const DriverPage()),
+                );
               },
             ),
+
+          // Historial de Entregas - Chofer
+          if (_isChofer(rol))
             ListTile(
-            leading: const Icon(Icons.history, color: AppColors.primaryColor),         
-            title: const Text('Historial de Entregas'),
-            onTap: () {
-              Navigator.pop(context); // Cerrar drawer
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const HistoryPage()),
-              );
-            },
-          ),
-          
-          // REPORTES GERENCIALES (Admin y Gerente)
-          if (userRole == '1' || userRole == '3')
+              leading: const Icon(Icons.history, color: AppColors.primaryColor),
+              title: const Text('Historial de Entregas'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const HistoryPage()),
+                );
+              },
+            ),
+
+          // Reportes Gerenciales - Admin y Gerente
+          if (_isAdminOrGerente(rol))
             ListTile(
               leading: const Icon(Icons.assessment, color: AppColors.primaryColor),
               title: const Text('Reportes Gerenciales'),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(
-                  builder: (context) => const ManagerDashboardPage()
-                ));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ManagerDashboardPage()),
+                );
               },
             ),
-          
-          // REPORTE FACTURACIÓN (Admin y Gerente)
-          if (userRole == '1' || userRole == '3')
+
+          // Reporte Facturación - Admin y Gerente
+          if (_isAdminOrGerente(rol))
             ListTile(
               leading: const Icon(Icons.receipt_long, color: Colors.indigo),
               title: const Text('Reporte Facturación'),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(
-                  builder: (context) => const BillingPage()
-                ));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const BillingPage()),
+                );
               },
             ),
-          
-          // RANKING DE PRODUCTOS (Admin y Gerente)
-          if (userRole == '1' || userRole == '3')
+
+          // Ranking de Productos - Admin y Gerente
+          if (_isAdminOrGerente(rol))
             ListTile(
               leading: const Icon(Icons.production_quantity_limits, color: Colors.indigo),
               title: const Text('Ranking de Productos'),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(
-                  builder: (context) => const ProductRankingPage()
-                ));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ProductRankingPage()),
+                );
               },
             ),
-          
-          // MIS PEDIDOS (Vendedor - Rol 2)
-          if (userRole == '2')
+
+          // Mis Pedidos - Vendedor
+          if (_isVendedor(rol))
             ListTile(
               leading: const Icon(Icons.shopping_cart, color: AppColors.primaryColor),
               title: const Text('Mis Pedidos'),
-              onTap: () => Navigator.pop(context), // Aquí deberías navegar a la página de pedidos
+              onTap: () => Navigator.pop(context),
             ),
 
           const Divider(),
-          
-          // CERRAR SESIÓN
+
+          // Cerrar Sesión
           ListTile(
             leading: const Icon(Icons.logout, color: AppColors.errorColor),
-            title: const Text('Cerrar Sesión', style: TextStyle(color: AppColors.errorColor)),
+            title: const Text(
+              'Cerrar Sesión',
+              style: TextStyle(color: AppColors.errorColor),
+            ),
             onTap: onLogout,
           ),
         ],

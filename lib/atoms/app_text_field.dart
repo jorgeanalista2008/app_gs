@@ -7,6 +7,8 @@ class AppTextField extends StatelessWidget {
   final String hintText;
   final bool obscureText;
   final IconData? icon;
+  final TextInputType? keyboardType;
+  final Function(String)? onSubmitted;
 
   const AppTextField({
     super.key,
@@ -15,6 +17,8 @@ class AppTextField extends StatelessWidget {
     required this.hintText,
     this.obscureText = false,
     this.icon,
+    this.keyboardType,
+    this.onSubmitted,
   });
 
   @override
@@ -22,6 +26,8 @@ class AppTextField extends StatelessWidget {
     return TextField(
       controller: controller,
       obscureText: obscureText,
+      keyboardType: keyboardType,
+      onSubmitted: onSubmitted,
       decoration: InputDecoration(
         labelText: labelText,
         hintText: hintText,
@@ -29,9 +35,18 @@ class AppTextField extends StatelessWidget {
         filled: true,
         fillColor: AppColors.cardColor,
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primaryColor, width: 2)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10), 
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10), 
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10), 
+          borderSide: const BorderSide(color: AppColors.primaryColor, width: 2),
+        ),
       ),
     );
   }
