@@ -90,7 +90,7 @@ class _ClientesPageState extends State<ClientesPage> {
             child: AppTextField(
               controller: _searchController,
               labelText: 'Buscar cliente',
-              hintText: 'Nombre, RIF, código o teléfono...',
+              hintText: 'Nombre, RIF, o código ...',
               icon: Icons.search,
               onSubmitted: _filtrarClientes,
             ),

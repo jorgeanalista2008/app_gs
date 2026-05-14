@@ -7,7 +7,7 @@ class ClienteRepository {
   /// Obtiene los clientes asignados a un vendedor específico
   Future<List<ClienteModel>> getClientesByVendedor(String userId) async {
     return _repo.getList<ClienteModel>(
-      path: '/salesperson/$userId/customers',
+      path: '/salesperson/me/customers/',
       nestedKey: 'customers',
       fromJson: (json) => ClienteModel.fromJson(json),
     );

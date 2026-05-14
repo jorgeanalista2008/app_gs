@@ -9,7 +9,7 @@ import '../pages/product_ranking_page.dart';
 import '../pages/driver_page.dart';
 import '../pages/clientes_page.dart';
 import '../pages/articulos_page.dart';
-
+import '../pages/catalogo_page.dart';
 class AppDrawer extends StatelessWidget {
   final String userName;
   final String? userRole;
@@ -180,19 +180,20 @@ class AppDrawer extends StatelessWidget {
               },
             ),
 
-          // Ranking de Productos - Admin y Gerente
-          if (_isAdminOrGerente(rol))
-            ListTile(
-              leading: const Icon(Icons.production_quantity_limits, color: Colors.indigo),
-              title: const Text('Ranking de Productos'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ProductRankingPage()),
-                );
-              },
-            ),
+
+            // Catálogo de Productos - Admin, Gerente, Vendedor
+            if (_isAdmin(rol) || _isGerente(rol) || _isVendedor(rol))
+              ListTile(
+                leading: const Icon(Icons.inventory_2, color: AppColors.primaryColor),
+                title: const Text('Catálogo de Productos'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const CatalogoPage()),
+                  );
+                },
+              ),
 
           // Mis Pedidos - Vendedor
           if (_isVendedor(rol))
