@@ -10,6 +10,7 @@ import '../pages/driver_page.dart';
 import '../pages/clientes_page.dart';
 import '../pages/articulos_page.dart';
 import '../pages/catalogo_page.dart';
+import '../pages/visitas_page.dart';
 class AppDrawer extends StatelessWidget {
   final String userName;
   final String? userRole;
@@ -201,6 +202,20 @@ class AppDrawer extends StatelessWidget {
               leading: const Icon(Icons.shopping_cart, color: AppColors.primaryColor),
               title: const Text('Mis Pedidos'),
               onTap: () => Navigator.pop(context),
+            ),
+
+                      // Visitas - Vendedor
+          if (_isVendedor(rol))
+            ListTile(
+              leading: const Icon(Icons.assignment, color: AppColors.primaryColor),
+              title: const Text('Mis Visitas'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const VisitasPage()),
+                );
+              },
             ),
 
           const Divider(),

@@ -72,57 +72,7 @@ class _DashboardContentState extends State<DashboardContent> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // --- 1. BARRA DE DÓLARES (Para TODOS) ---
-          if (dolarData != null &&
-              dolarData!['bcv'].isNotEmpty &&
-              dolarData!['usdt'].isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 20),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: DolarIndicator(
-                      title: "Dólar BCV",
-                      dolar: DolarModel.fromJson(
-                          dolarData!['bcv'] as Map<String, dynamic>),
-                      backgroundColor: Colors.greenAccent.shade700,
-                    ),
-                  ),
-                  const SizedBox(width: 15),
-                  Expanded(
-                    child: DolarIndicator(
-                      title: "USDT Paralelo",
-                      dolar: DolarModel.fromJson(
-                          dolarData!['usdt'] as Map<String, dynamic>),
-                      backgroundColor: Colors.blueAccent.shade700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          // --- 2. SALUDO ---
-          Text(
-            'Hola, ${widget.userName} 👋',
-            style: const TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 10),
-
-          // Subtítulo con rol
-          Text(
-            _getRoleDisplayName(),
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[500],
-            ),
-          ),
-          const SizedBox(height: 30),
-
-          // --- 3. TARJETAS POR ROL ---
+     
           _buildRoleSpecificCards(),
 
           const SizedBox(height: 30),

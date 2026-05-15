@@ -287,110 +287,129 @@ class _CatalogoPageState extends State<CatalogoPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Imagen
-             // Imagen
-            Center(
-              child: GestureDetector(
-                onTap: () => _mostrarGaleria(producto),
-                child: Container(
-                  height: 90,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryColor.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: esBialy ? bialyColor.withOpacity(0.3) : Colors.transparent),
-                  ),
-                  child: Stack(
-                    children: [
-                      // Mostrar imagen real o icono por defecto
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: producto.imagen1Url.isNotEmpty
-                            ? Image.network(
-                                producto.imagen1Url,
-                                fit: BoxFit.cover,
-                                width: double.infinity,
-                                height: 90,
-                                loadingBuilder: (context, child, loadingProgress) {
-                                  if (loadingProgress == null) return child;
-                                  return Center(
-                                    child: CircularProgressIndicator(
-                                      color: AppColors.primaryColor,
-                                      strokeWidth: 2,
-                                      value: loadingProgress.expectedTotalBytes != null
-                                          ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                                          : null,
-                                    ),
-                                  );
-                                },
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Center(
-                                    child: Icon(Icons.inventory_2, color: AppColors.primaryColor.withOpacity(0.3), size: 50),
-                                  );
-                                },
-                              )
-                            : Center(
-                                child: Icon(Icons.inventory_2, color: AppColors.primaryColor.withOpacity(0.3), size: 50),
-                              ),
-                      ),
+              Center(
+                child: GestureDetector(
+                  onTap: () => _mostrarGaleria(producto),
+                  child: Container(
+                    height: 90,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryColor.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: esBialy ? bialyColor.withOpacity(0.3) : Colors.transparent),
+                    ),
+                    child: Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: producto.imagen1Url.isNotEmpty
+                              ? Image.network(
+                                  producto.imagen1Url,
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  height: 90,
+                                  loadingBuilder: (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return Center(
+                                      child: CircularProgressIndicator(
+                                        color: AppColors.primaryColor,
+                                        strokeWidth: 2,
+                                        value: loadingProgress.expectedTotalBytes != null
+                                            ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                            : null,
+                                      ),
+                                    );
+                                  },
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Center(
+                                      child: Icon(Icons.inventory_2, color: AppColors.primaryColor.withOpacity(0.3), size: 50),
+                                    );
+                                  },
+                                )
+                              : Center(
+                                  child: Icon(Icons.inventory_2, color: AppColors.primaryColor.withOpacity(0.3), size: 50),
+                                ),
+                        ),
 
-                      // Badge BIALY
-                      if (esBialy)
+                        // Badge BIALY
+                        if (esBialy)
+                          Positioned(
+                            top: 6,
+                            left: 6,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: bialyColor,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text(
+                                'BIALY',
+                                style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                              ),
+                            ),
+                          ),
+
+                        // Badge stock
                         Positioned(
                           top: 6,
-                          left: 6,
+                          right: 6,
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                             decoration: BoxDecoration(
-                              color: bialyColor,
+                              color: producto.tieneStock ? Colors.green.withOpacity(0.8) : Colors.red.withOpacity(0.8),
                               borderRadius: BorderRadius.circular(6),
                             ),
-                            child: const Text(
-                              'BIALY',
-                              style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                            child: Text(
+                              producto.tieneStock ? 'DISP' : 'AGOT',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),
 
-                      // Badge stock
-                      Positioned(
-                        top: 6,
-                        right: 6,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: producto.tieneStock ? Colors.green.withOpacity(0.8) : Colors.red.withOpacity(0.8),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            producto.tieneStock ? 'DISP' : 'AGOT',
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                        // Ícono galería
+                        if (producto.imagenesUrls.length > 1)
+                         // Badge stock - MÁS VISIBLE
+                            Positioned(
+                              top: 6,
+                              right: 6,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: producto.tieneStock
+                                      ? Colors.green.withOpacity(0.9)
+                                      : Colors.red.withOpacity(0.9),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      producto.tieneStock ? Icons.check : Icons.close,
+                                      size: 10,
+                                      color: Colors.white,
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      producto.tieneStock ? '${producto.stockAct}' : 'AGOT',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                      ),
-
-                      // Ícono galería (solo si hay más de 1 imagen)
-                      if (producto.imagenesUrls.length > 1)
-                        Positioned(
-                          bottom: 6,
-                          right: 6,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.5),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Icon(Icons.zoom_in, size: 16, color: Colors.white),
-                          ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
               const SizedBox(height: 10),
 
               // Código
@@ -438,13 +457,15 @@ class _CatalogoPageState extends State<CatalogoPage> {
                 ),
 
               // Precio y stock
+          // Precio y stock - DISEÑO MEJORADO
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
+                  // Precio
                   Flexible(
                     child: Text(
-                      '\$${producto.mejorPrecio.toStringAsFixed(2)}',
+                      '\$${producto.precVta1.toStringAsFixed(2)}',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -454,12 +475,47 @@ class _CatalogoPageState extends State<CatalogoPage> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  Text(
-                    producto.tieneStock ? '${producto.stockAct}' : '0',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: producto.tieneStock ? Colors.green : Colors.red,
+
+                  // Stock mejorado
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: producto.tieneStock
+                          ? Colors.green.withOpacity(0.1)
+                          : Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: producto.tieneStock
+                            ? Colors.green.withOpacity(0.3)
+                            : Colors.red.withOpacity(0.3),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          producto.tieneStock ? Icons.inventory : Icons.inventory_outlined,
+                          size: 12,
+                          color: producto.tieneStock ? Colors.green.shade700 : Colors.red.shade700,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          producto.tieneStock ? '${producto.stockAct}' : '0',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: producto.tieneStock ? Colors.green.shade700 : Colors.red.shade700,
+                          ),
+                        ),
+                        Text(
+                          ' ${producto.uniVenta}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: producto.tieneStock ? Colors.green.shade700 : Colors.red.shade700,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -471,32 +527,31 @@ class _CatalogoPageState extends State<CatalogoPage> {
     );
   }
 
-    void _mostrarGaleria(ProductoModel producto) {
-      // USAR LAS URLs COMPLETAS
+  void _mostrarGaleria(ProductoModel producto) {
+    print('=== DEBUG IMÁGENES ===');
+    print('imagen1 crudo: "${producto.imagen1}"');
+    print('imagen2 crudo: "${producto.imagen2}"');
+    print('imagen1Url: "${producto.imagen1Url}"');
+    print('imagen2Url: "${producto.imagen2Url}"');
+    print('imagenesUrls: ${producto.imagenesUrls}');
+    print('=======================');
 
-        print('=== DEBUG IMÁGENES ===');
-        print('imagen1 crudo: "${producto.imagen1}"');
-        print('imagen2 crudo: "${producto.imagen2}"');
-        print('imagen1Url: "${producto.imagen1Url}"');
-        print('imagen2Url: "${producto.imagen2Url}"');
-        print('imagenesUrls: ${producto.imagenesUrls}');
-        print('=======================');
-      final imagenes = producto.imagenesUrls;
+    final imagenes = producto.imagenesUrls;
 
-      if (imagenes.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No hay imágenes disponibles')),
-        );
-        return;
-      }
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => _GaleriaPage(producto: producto, imagenes: imagenes),
-        ),
+    if (imagenes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay imágenes disponibles')),
       );
+      return;
     }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => _GaleriaPage(producto: producto, imagenes: imagenes),
+      ),
+    );
+  }
 
   void _mostrarDetalleProducto(ProductoModel producto) {
     final esBialy = producto.desCol.toUpperCase() == 'BIALY';
@@ -504,8 +559,9 @@ class _CatalogoPageState extends State<CatalogoPage> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
         return DraggableScrollableSheet(
@@ -515,15 +571,23 @@ class _CatalogoPageState extends State<CatalogoPage> {
           expand: false,
           builder: (context, scrollController) {
             return Container(
-              padding: const EdgeInsets.all(24),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
               child: ListView(
                 controller: scrollController,
+                padding: const EdgeInsets.all(24),
                 children: [
+                  // Indicador de arrastre
                   Center(
                     child: Container(
                       width: 40,
                       height: 4,
-                      decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -531,42 +595,89 @@ class _CatalogoPageState extends State<CatalogoPage> {
                   // Badge BIALY
                   if (esBialy)
                     Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(color: bialyColor, borderRadius: BorderRadius.circular(8)),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: bialyColor,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.star, color: Colors.white, size: 18),
-                          SizedBox(width: 6),
-                          Text('PRODUCTO DESTACADO BIALY',
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                          Icon(Icons.star_rounded, color: Colors.white, size: 20),
+                          SizedBox(width: 8),
+                          Text(
+                            'PRODUCTO DESTACADO BIALY',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
                         ],
                       ),
                     ),
 
+                  // Título
                   Text(
                     producto.artDes,
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: esBialy ? bialyColor : AppColors.textPrimary),
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: esBialy ? bialyColor : AppColors.textPrimary,
+                      height: 1.3,
+                    ),
                   ),
                   const SizedBox(height: 8),
-                  Text('Código: ${producto.coArt}', style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+
+                  // Código y marca
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryColor.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          producto.coArt,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primaryColor,
+                          ),
+                        ),
+                      ),
+                      if (producto.desCol.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: esBialy ? bialyColor.withOpacity(0.08) : Colors.grey[100],
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            producto.desCol,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: esBialy ? bialyColor : Colors.grey[700],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                   const SizedBox(height: 20),
                   const Divider(),
-                  const SizedBox(height: 16),
-                  _buildPreciosSection(producto),
                   const SizedBox(height: 20),
-                  _buildDetailRow(Icons.business, 'Marca', producto.desCol),
-                  _buildDetailRow(Icons.category, 'Línea', producto.linDes),
-                  _buildDetailRow(Icons.label, 'Categoría', producto.catDes),
-                  _buildDetailRow(Icons.location_on, 'Ubicación', producto.ubicacion),
-                  _buildDetailRow(Icons.straighten, 'Unidad', producto.uniVenta),
-                  _buildDetailRow(Icons.inventory, 'Stock', producto.tieneStock ? '${producto.stockAct} ${producto.uniVenta}' : 'Agotado'),
-                  _buildDetailRow(Icons.local_shipping, 'Proveedor', producto.proveedor),
-                  _buildDetailRow(Icons.shopping_cart, 'Última compra', producto.ultimaCompra),
-                  _buildDetailRow(Icons.point_of_sale, 'Última venta', producto.ultimaVenta),
-                  _buildDetailRow(Icons.receipt, 'Impuesto', producto.tipoImpuestoDesc),
-                  _buildDetailRow(Icons.update, 'Última modificación', producto.ultimaModificacion),
+
+                  // Sección de precios
+                  _buildPreciosSection(producto),
+                  const SizedBox(height: 24),
+
+                  // Información del producto
+                  _buildDetailCard(producto),
                   const SizedBox(height: 20),
                 ],
               ),
@@ -577,18 +688,102 @@ class _CatalogoPageState extends State<CatalogoPage> {
     );
   }
 
+  // ─── Card de detalles con íconos ───
+  Widget _buildDetailCard(ProductoModel producto) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey[100]!),
+      ),
+      child: Column(
+        children: [
+          _buildDetailRow(Icons.category_outlined, 'Marca', producto.linDes),
+          _buildDetailRow(Icons.label_outline, 'Categoría', producto.catDes),
+          _buildDetailRow(Icons.location_on_outlined, 'Ubicación', producto.ubicacion),
+          _buildDetailRow(Icons.straighten, 'Unidad de venta', producto.uniVenta),
+          _buildDetailRow(
+            Icons.inventory_2_outlined,
+            'Stock',
+            producto.tieneStock ? '${producto.stockAct} ${producto.uniVenta}' : 'Agotado',
+          ),
+          //_buildDetailRow(Icons.local_shipping_outlined, 'Proveedor', producto.proveedor),
+        //  _buildDetailRow(Icons.shopping_cart_outlined, 'Última compra', producto.ultimaCompra),
+          _buildDetailRow(Icons.point_of_sale_outlined, 'Última venta', producto.ultimaVenta),
+          _buildDetailRow(Icons.receipt_outlined, 'Tipo de impuesto', producto.tipoImpuestoDesc),
+       //   _buildDetailRow(Icons.update_outlined, 'Última modificación', producto.ultimaModificacion),
+        ],
+      ),
+    );
+  }
+
+  // ─── Fila de detalle con ícono ───
+  Widget _buildDetailRow(IconData icon, String label, String value) {
+    if (value.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: AppColors.primaryColor.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 16, color: AppColors.primaryColor),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPreciosSection(ProductoModel producto) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: AppColors.primaryColor.withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        color: AppColors.primaryColor.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('Precios de Venta', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 12),
-          Row(children: [_buildPrecioCard('Precio 1', producto.precVta1), const SizedBox(width: 8), _buildPrecioCard('Precio 2', producto.precVta2)]),
+          Row(
+            children: [
+              _buildPrecioCard('Precio 1', producto.precVta1),
+              const SizedBox(width: 8),
+              _buildPrecioCard('Precio 2', producto.precVta2),
+            ],
+          ),
           const SizedBox(height: 8),
-          Row(children: [_buildPrecioCard('Precio 3', producto.precVta3), const SizedBox(width: 8), _buildPrecioCard('Precio 4', producto.precVta4)]),
+          Row(
+            children: [
+              _buildPrecioCard('Precio 3', producto.precVta3),
+              const SizedBox(width: 8),
+              _buildPrecioCard('Precio 4', producto.precVta4),
+            ],
+          ),
         ],
       ),
     );
@@ -598,30 +793,19 @@ class _CatalogoPageState extends State<CatalogoPage> {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey[200]!)),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey[200]!),
+        ),
         child: Column(
           children: [
             Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[500])),
             const SizedBox(height: 4),
-            Text('\$${precio.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            Text('\$${precio.toStringAsFixed(2)}',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildDetailRow(IconData icon, String label, String value) {
-    if (value.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: Colors.grey[500]),
-          const SizedBox(width: 10),
-          Text('$label: ', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13))),
-        ],
       ),
     );
   }
@@ -695,10 +879,7 @@ class _GaleriaPageState extends State<_GaleriaPage> {
                             : null,
                       ),
                       const SizedBox(height: 16),
-                      Text(
-                        'Cargando...',
-                        style: TextStyle(color: Colors.grey[400]),
-                      ),
+                      Text('Cargando...', style: TextStyle(color: Colors.grey[400])),
                     ],
                   );
                 },
@@ -710,10 +891,8 @@ class _GaleriaPageState extends State<_GaleriaPage> {
                     children: [
                       Icon(Icons.broken_image, size: 80, color: Colors.grey[600]),
                       const SizedBox(height: 16),
-                      Text(
-                        'No se pudo cargar la imagen',
-                        style: TextStyle(color: Colors.grey[400]),
-                      ),
+                      Text('No se pudo cargar la imagen',
+                          style: TextStyle(color: Colors.grey[400])),
                       const SizedBox(height: 8),
                       Text(
                         'Imagen ${index + 1} de ${widget.imagenes.length}',
@@ -721,9 +900,7 @@ class _GaleriaPageState extends State<_GaleriaPage> {
                       ),
                       const SizedBox(height: 16),
                       TextButton(
-                        onPressed: () {
-                          setState(() {});
-                        },
+                        onPressed: () => setState(() {}),
                         child: const Text('Reintentar', style: TextStyle(color: Colors.white)),
                       ),
                     ],
@@ -739,20 +916,17 @@ class _GaleriaPageState extends State<_GaleriaPage> {
         padding: const EdgeInsets.symmetric(vertical: 16),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Indicador de puntos
-            ...List.generate(widget.imagenes.length, (index) {
-              return Container(
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _currentIndex == index ? Colors.white : Colors.grey[600],
-                ),
-              );
-            }),
-          ],
+          children: List.generate(widget.imagenes.length, (index) {
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _currentIndex == index ? Colors.white : Colors.grey[600],
+              ),
+            );
+          }),
         ),
       ),
     );
