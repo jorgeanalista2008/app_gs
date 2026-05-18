@@ -9,6 +9,7 @@ import '../services/location_service.dart';
 import '../atoms/photo_capture_widget.dart';
 import '../atoms/app_button.dart';
 
+
 class EncuestaPage extends StatefulWidget {
   final VisitaModel visita;
 
@@ -86,13 +87,15 @@ class _EncuestaPageState extends State<EncuestaPage> {
     }
   }
 
-  void _enviarEncuesta() {
+   void _enviarEncuesta() async {
     if (_formKey.currentState?.validate() != true) return;
 
     // Verificar preguntas requeridas
     if (_encuesta != null) {
       for (var pregunta in _encuesta!.questions) {
-        if (pregunta.isRequired && (_respuestas[pregunta.id] == null || _respuestas[pregunta.id].toString().isEmpty)) {
+        if (pregunta.isRequired &&
+            (_respuestas[pregunta.id] == null ||
+            _respuestas[pregunta.id].toString().isEmpty)) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('La pregunta "${pregunta.description}" es obligatoria'),
@@ -104,31 +107,51 @@ class _EncuestaPageState extends State<EncuestaPage> {
       }
     }
 
-    print('=== ENVIANDO ENCUESTA ===');
-    print('Visita ID: ${widget.visita.id}');
-    print('Cliente: ${widget.visita.customerName}');
-    print('📍 Lat: $_lat, Lng: $_lng');
-    print('📷 Foto 1: ${_foto1?.path ?? "No tomada"}');
-    print('📷 Foto 2: ${_foto2?.path ?? "No tomada"}');
-    print('📝 Respuestas: $_respuestas');
-    print('==========================');
-
     setState(() => _isEnviando = true);
 
-    // Simular envío (cuando tengamos el endpoint POST)
-    Future.delayed(const Duration(seconds: 1), () {
+    try {
+      final exito = await _encuestaRepo.enviarTodasLasRespuestas(
+        visitId: widget.visita.id,
+        respuestas: _respuestas,
+        lat: _lat,
+        lng: _lng,
+        foto1Path: _foto1?.path,
+        foto2Path: _foto2?.path,
+      );
+
+      if (mounted) {
+        setState(() => _isEnviando = false);
+
+        if (exito) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Encuesta enviada correctamente'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          Navigator.pop(context, true);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ Error al enviar la encuesta. Intente de nuevo.'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } catch (e) {
       if (mounted) {
         setState(() => _isEnviando = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Encuesta enviada correctamente'),
-            backgroundColor: AppColors.primaryColor,
-            behavior: SnackBarBehavior.floating,
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
           ),
         );
-        Navigator.pop(context, true);
       }
-    });
+    }
   }
 
   @override
@@ -141,7 +164,7 @@ class _EncuestaPageState extends State<EncuestaPage> {
         foregroundColor: Colors.white,
         elevation: 0,
       ),
-      body: _isLoadingEncuesta
+          body: _isLoadingEncuesta
           ? const Center(child: CircularProgressIndicator(color: AppColors.primaryColor))
           : Form(
               key: _formKey,
@@ -152,8 +175,7 @@ class _EncuestaPageState extends State<EncuestaPage> {
                   children: [
                     _buildHeaderVisita(),
                     const SizedBox(height: 24),
-                    _buildGpsSection(),
-                    const SizedBox(height: 24),
+                    // _buildGpsSection(), ← QUITAR ESTA LÍNEA
                     _buildPreguntasSection(),
                     const SizedBox(height: 24),
                     _buildFotosSection(),

@@ -100,91 +100,94 @@ class _PhotoCaptureWidgetState extends State<PhotoCaptureWidget> {
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
               ),
               child: _photo != null
-                  ? Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        ClipRRect(
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
-                          child: Image.file(
-                            _photo!,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        // Botón eliminar
-                        Positioned(
-                          top: 8,
-                          right: 8,
-                          child: GestureDetector(
-                            onTap: _eliminarFoto,
-                            child: Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.6),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.close, color: Colors.white, size: 18),
+                  ? ClipRRect(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
+                      child: Stack(
+                        children: [
+                          // Imagen de fondo
+                          Positioned.fill(
+                            child: Image.file(
+                              _photo!,
+                              fit: BoxFit.cover,
                             ),
                           ),
-                        ),
-                        // Botón cambiar foto
-                        Positioned(
-                          bottom: 8,
-                          right: 8,
-                          child: GestureDetector(
-                            onTap: _mostrarOpciones,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.6),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.camera_alt, color: Colors.white, size: 14),
-                                  SizedBox(width: 4),
-                                  Text('Cambiar', style: TextStyle(color: Colors.white, fontSize: 12)),
-                                ],
+                          // Botón eliminar
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: GestureDetector(
+                              onTap: _eliminarFoto,
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.6),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.close, color: Colors.white, size: 18),
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                          // Botón cambiar
+                          Positioned(
+                            bottom: 8,
+                            right: 8,
+                            child: GestureDetector(
+                              onTap: _mostrarOpciones,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.6),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.camera_alt, color: Colors.white, size: 14),
+                                    SizedBox(width: 4),
+                                    Text('Cambiar', style: TextStyle(color: Colors.white, fontSize: 12)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     )
                   : Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.camera_alt, size: 40, color: Colors.grey[400]),
                         const SizedBox(height: 8),
-                        Text(
-                          widget.label,
-                          style: TextStyle(color: Colors.grey[500], fontSize: 14),
-                        ),
+                        Text(widget.label, style: TextStyle(color: Colors.grey[500], fontSize: 14)),
                         const SizedBox(height: 4),
-                        Text(
-                          'Toca para capturar',
-                          style: TextStyle(color: Colors.grey[400], fontSize: 11),
-                        ),
+                        Text('Toca para capturar', style: TextStyle(color: Colors.grey[400], fontSize: 11)),
                       ],
                     ),
             ),
           ),
 
+        
           // Botones de acción
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             decoration: BoxDecoration(
               border: Border(top: BorderSide(color: Colors.grey[200]!)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _buildActionButton(Icons.camera_alt, 'Cámara', _tomarFoto),
-                Container(width: 1, height: 24, color: Colors.grey[300]),
-                _buildActionButton(Icons.photo_library, 'Galería', _seleccionarDeGaleria),
+                Flexible(
+                  child: _buildActionButton(Icons.camera_alt, 'Cámara', _tomarFoto),
+                ),
+                const SizedBox(width: 2),
+                Flexible(
+                  child: _buildActionButton(Icons.photo_library, 'Galería', _seleccionarDeGaleria),
+                ),
                 if (_photo != null) ...[
-                  Container(width: 1, height: 24, color: Colors.grey[300]),
-                  _buildActionButton(Icons.delete, 'Eliminar', _eliminarFoto, color: Colors.red),
+                  const SizedBox(width: 2),
+                  Flexible(
+                    child: _buildActionButton(Icons.delete, 'Eliminar', _eliminarFoto, color: Colors.red),
+                  ),
                 ],
               ],
             ),
@@ -194,20 +197,23 @@ class _PhotoCaptureWidgetState extends State<PhotoCaptureWidget> {
     );
   }
 
-  Widget _buildActionButton(IconData icon, String label, VoidCallback onTap, {Color? color}) {
+    Widget _buildActionButton(IconData icon, String label, VoidCallback onTap, {Color? color}) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 20, color: color ?? AppColors.primaryColor),
+            Icon(icon, size: 18, color: color ?? AppColors.primaryColor),
             const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(fontSize: 10, color: color ?? AppColors.primaryColor),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                style: TextStyle(fontSize: 9, color: color ?? AppColors.primaryColor),
+              ),
             ),
           ],
         ),
