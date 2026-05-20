@@ -148,7 +148,7 @@ Widget build(BuildContext context) {
       actions: [
         // Botón de sincronización con contador
         FutureBuilder<int>(
-          future: DatabaseHelper.instance.contarPendientes(),
+         future: DatabaseHelper.instance.contarRespuestasPendientes(), // ← CAMBIADO
           builder: (context, snapshot) {
             final pendientes = snapshot.data ?? 0;
             return Stack(

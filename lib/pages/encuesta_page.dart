@@ -70,26 +70,64 @@ class _EncuestaPageState extends State<EncuestaPage> {
     }
   }
 
-  Future<void> _loadEncuesta() async {
-    setState(() => _isLoadingEncuesta = true);
+ Future<void> _loadEncuesta() async {
+  setState(() => _isLoadingEncuesta = true);
 
-    try {
-      final encuesta = await _encuestaRepo.getEncuesta(widget.visita.id);
-      if (mounted) {
-        setState(() {
-          _encuesta = encuesta;
-          _isLoadingEncuesta = false;
-        });
-      }
-    } catch (e) {
+  // Verificar conexión primero
+  final conectado = await ConnectivityService.instance.isConnected();
+  
+  if (!conectado) {
+    // Intentar cargar de SQLite
+    final db = DatabaseHelper.instance;
+    final encuestaLocal = await db.getEncuestaByVisitaId(widget.visita.id);
+    
+    if (encuestaLocal != null && mounted) {
+      // Cargar preguntas desde SQLite
+      final questionsJson = jsonDecode(encuestaLocal['questions_json'] as String);
+      // ... reconstruir EncuestaModel
+      setState(() => _isLoadingEncuesta = false);
+    } else {
       if (mounted) {
         setState(() => _isLoadingEncuesta = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al cargar preguntas: $e'), backgroundColor: Colors.red),
+          const SnackBar(
+            content: Text('📴 Sin conexión. No hay datos locales para esta visita.'),
+            backgroundColor: Colors.orange,
+          ),
         );
       }
     }
+    return;
   }
+
+  // Online: cargar de API
+  try {
+    final encuesta = await _encuestaRepo.getEncuesta(widget.visita.id);
+    if (mounted) {
+      setState(() {
+        _encuesta = encuesta;
+        _isLoadingEncuesta = false;
+      });
+      
+      // Guardar en SQLite para offline
+      if (encuesta != null) {
+        final db = DatabaseHelper.instance;
+        await db.guardarEncuestaPreguntas(
+          id: encuesta.id,
+          visitId: widget.visita.id,
+          questionsJson: jsonEncode(encuesta.questions.map((q) => q.toJson()).toList()),
+        );
+      }
+    }
+  } catch (e) {
+    if (mounted) {
+      setState(() => _isLoadingEncuesta = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al cargar preguntas: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+}
 
  void _enviarEncuesta() async {
   if (_formKey.currentState?.validate() != true) return;
@@ -131,7 +169,7 @@ class _EncuestaPageState extends State<EncuestaPage> {
     });
 
     // Primero verificar conexión rápido
-    final conectado = await ConnectivityService.isConnected();
+    final conectado = await ConnectivityService.instance.isConnected();
     
     if (!conectado) {
       // OFFLINE DETECTADO - Guardar localmente
@@ -185,7 +223,7 @@ class _EncuestaPageState extends State<EncuestaPage> {
 Future<void> _guardarLocalmente(List<Map<String, dynamic>> arrayRespuestas) async {
   try {
     final db = DatabaseHelper.instance;
-    await db.guardarEncuesta(
+    await db.guardarRespuesta(  // ← CAMBIADO: guardarRespuesta en lugar de guardarEncuesta
       visitId: widget.visita.id,
       customerName: widget.visita.customerName,
       respuestasJson: jsonEncode(arrayRespuestas),
