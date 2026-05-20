@@ -19,18 +19,27 @@ class AppButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      height: 50,
+      height: 52, // Ligeramente más alto para un look moderno
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: backgroundColor ?? (isLoading ? Colors.grey : AppColors.primaryColor),
+          backgroundColor: backgroundColor ?? AppColors.primaryColor,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          disabledBackgroundColor: Colors.grey.shade300,
+          disabledForegroundColor: Colors.grey.shade500,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 0,
+          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.5),
         ),
         child: isLoading
-            ? const SizedBox(
-                height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            ? SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: backgroundColor != null ? Colors.white : AppColors.primaryColor,
+                ),
+              )
             : Text(text),
       ),
     );

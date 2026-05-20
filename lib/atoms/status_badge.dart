@@ -1,5 +1,5 @@
-// lib/features/scanner/atoms/status_badge.dart
 import 'package:flutter/material.dart';
+import '../core/app_colors.dart';
 
 class StatusBadge extends StatelessWidget {
   final String status;
@@ -13,21 +13,27 @@ class StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final statusColor = _getStatusColor(status);
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: small ? 8 : 12,
+        horizontal: small ? 10 : 14,
         vertical: small ? 4 : 6,
       ),
       decoration: BoxDecoration(
-        color: _getStatusColor(status),
-        borderRadius: BorderRadius.circular(20),
+        color: statusColor.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(30), // Cápsula elegante
+        border: Border.all(
+          color: statusColor.withOpacity(0.2),
+          width: 1,
+        ),
       ),
       child: Text(
         status.toUpperCase(),
         style: TextStyle(
-          color: Colors.white,
-          fontSize: small ? 10 : 12,
+          color: statusColor,
+          fontSize: small ? 9 : 11,
           fontWeight: FontWeight.bold,
+          letterSpacing: 0.5,
         ),
       ),
     );
@@ -35,12 +41,20 @@ class StatusBadge extends StatelessWidget {
 
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
-      case 'entregado': return Colors.green;
-      case 'pendiente': return Colors.orange;
-      case 'rechazado': return Colors.red;
-      case 'en camino': return Colors.blue;
-      case 'verificado': return Colors.green;
-      default: return Colors.grey;
+      case 'entregado':
+      case 'verificado':
+      case 'activo':
+      case 'completado':
+        return AppColors.successColor;
+      case 'pendiente':
+        return AppColors.warningColor;
+      case 'rechazado':
+      case 'inactivo':
+        return AppColors.errorColor;
+      case 'en camino':
+        return AppColors.secondaryColor;
+      default:
+        return AppColors.textSecondary;
     }
   }
 }

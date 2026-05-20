@@ -32,21 +32,6 @@ class AppTextField extends StatelessWidget {
         labelText: labelText,
         hintText: hintText,
         prefixIcon: icon != null ? Icon(icon) : null,
-        filled: true,
-        fillColor: AppColors.cardColor,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10), 
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10), 
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10), 
-          borderSide: const BorderSide(color: AppColors.primaryColor, width: 2),
-        ),
       ),
     );
   }

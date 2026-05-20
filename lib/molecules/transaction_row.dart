@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
+import '../atoms/status_badge.dart';
 
 class TransactionRow extends StatelessWidget {
   final String id;
@@ -42,7 +43,7 @@ class TransactionRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(client, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  Text("Pedido #$id", style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                  Text("Pedido #$id", style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                 ],
               ),
             ],
@@ -50,21 +51,11 @@ class TransactionRow extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(amount, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: status == 'Completado' ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  status,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: status == 'Completado' ? Colors.green : Colors.orange,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+              Text(amount, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+              const SizedBox(height: 4),
+              StatusBadge(
+                status: status,
+                small: true,
               ),
             ],
           ),

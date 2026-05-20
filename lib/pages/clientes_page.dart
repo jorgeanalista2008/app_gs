@@ -4,6 +4,7 @@ import '../models/cliente_model.dart';
 import '../repositories/cliente_repository.dart';
 import '../atoms/app_button.dart';
 import '../atoms/app_text_field.dart';
+import '../atoms/status_badge.dart';
 
 class ClientesPage extends StatefulWidget {
   const ClientesPage({super.key});
@@ -248,22 +249,9 @@ class _ClientesPageState extends State<ClientesPage> {
               ),
 
               // Badge de activo
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: cliente.activo
-                      ? Colors.green.withOpacity(0.1)
-                      : Colors.red.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  cliente.activo ? 'Activo' : 'Inactivo',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: cliente.activo ? Colors.green : Colors.red,
-                  ),
-                ),
+              StatusBadge(
+                status: cliente.activo ? 'activo' : 'inactivo',
+                small: true,
               ),
               const SizedBox(width: 8),
 
