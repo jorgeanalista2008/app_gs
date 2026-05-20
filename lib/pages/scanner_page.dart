@@ -1,5 +1,6 @@
 // pages/scanner_page.dart - VERSIÓN ACTUALIZADA CON DISEÑO ESTÉTICO
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
@@ -233,11 +234,17 @@ class _ScannerPageState extends State<ScannerPage> {
             if (imagePath != null) ...[
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.file(
-                  File(imagePath),
-                  height: 150,
-                  fit: BoxFit.cover,
-                ),
+                child: kIsWeb
+                    ? Image.network(
+                        imagePath,
+                        height: 150,
+                        fit: BoxFit.cover,
+                      )
+                    : Image.file(
+                        File(imagePath),
+                        height: 150,
+                        fit: BoxFit.cover,
+                      ),
               ),
               const SizedBox(height: 16),
             ],

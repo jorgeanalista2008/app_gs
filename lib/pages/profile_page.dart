@@ -3,7 +3,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/app_colors.dart';
 import '../molecules/profile_header.dart';
 import '../molecules/profile_option_item.dart';
+import '../services/auth_service.dart';
 import 'login_page.dart';
+import 'account_info_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -13,9 +15,11 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
+  final AuthService _authService = AuthService();
   String? _userName;
   String? _userRole;
   String? _userPhoto;
+  String? _userEmail;
 
   @override
   void initState() {
@@ -24,12 +28,15 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   void _loadUserData() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _userName = prefs.getString('user_name') ?? 'Usuario';
-      _userRole = prefs.getString('user_role');
-      _userPhoto = prefs.getString('user_photo');
-    });
+    final userData = await _authService.getUserData();
+    if (userData != null) {
+      setState(() {
+        _userName = userData['name'] ?? 'Usuario';
+        _userRole = userData['role'];
+        _userPhoto = userData['photo'];
+        _userEmail = userData['email'];
+      });
+    }
   }
 
   void _logout() {
@@ -83,17 +90,21 @@ class _ProfilePageState extends State<ProfilePage> {
             const SizedBox(height: 30),
 
             // Sección: Cuenta
-            ProfileOptionItem(
-              icon: Icons.person,
-              title: 'Información de Cuenta',
-              subtitle: 'Ver y editar datos personales',
-              iconColor: AppColors.primaryColor,
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Módulo de edición de perfil en desarrollo')),
-                );
-              },
-            ),
+             ProfileOptionItem(
+               icon: Icons.person,
+               title: 'Información de Cuenta',
+               subtitle: 'Ver y editar datos personales',
+               iconColor: AppColors.primaryColor,
+               onTap: () async {
+                 final result = await Navigator.push(
+                   context,
+                   MaterialPageRoute(builder: (context) => const AccountInfoPage()),
+                 );
+                 if (result == true) {
+                   _loadUserData();
+                 }
+               },
+             ),
 
             // Sección: Seguridad
             ProfileOptionItem(

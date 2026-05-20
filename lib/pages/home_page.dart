@@ -126,6 +126,7 @@ class _HomePageState extends State<HomePage> {
         userEmail: _userEmail,
         onLogout: _logout,
         onScanPressed: _goToScanner,
+        onProfileUpdated: _loadUserData,
       ),
       body: DashboardContent(
         userName: _userName ?? 'Usuario',

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../core/app_colors.dart';
@@ -106,10 +107,15 @@ class _PhotoCaptureWidgetState extends State<PhotoCaptureWidget> {
                         children: [
                           // Imagen de fondo
                           Positioned.fill(
-                            child: Image.file(
-                              _photo!,
-                              fit: BoxFit.cover,
-                            ),
+                            child: kIsWeb
+                                ? Image.network(
+                                    _photo!.path,
+                                    fit: BoxFit.cover,
+                                  )
+                                : Image.file(
+                                    _photo!,
+                                    fit: BoxFit.cover,
+                                  ),
                           ),
                           // Botón eliminar
                           Positioned(

@@ -37,7 +37,7 @@ Future<LoginResponseModel> login(String identifier, String password) async {
       'name': response.user.fullName,
       'email': response.user.email,
       'role': response.user.role.name,
-      'photo': 'user.png', // Por ahora una foto por defecto
+      'photo': '', // Mostrar iniciales por defecto, editable por el usuario
       'branch_id': response.user.branchId,
       'tenant_id': response.user.tenantId,
     }));

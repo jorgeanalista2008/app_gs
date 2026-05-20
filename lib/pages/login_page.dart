@@ -13,8 +13,8 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final TextEditingController _userController = TextEditingController();
-  final TextEditingController _passController = TextEditingController();
+  final TextEditingController _userController = TextEditingController(text: 'vendedor@solsumed.com');
+  final TextEditingController _passController = TextEditingController(text: '123456');
   final AuthService _authService = AuthService();
   bool _isLoading = false;
 

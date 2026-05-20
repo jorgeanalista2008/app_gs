@@ -15,12 +15,21 @@ class ProfileHeader extends StatelessWidget {
   });
 
   String _getRoleName(String? role) {
-    switch (role) {
-      case '1': return 'Administrador';
-      case '2': return 'Vendedor';
-      case '3': return 'Gerente';
-      case '5': return 'Chofer';
-      default: return 'Usuario';
+    switch (role?.toLowerCase()) {
+      case '1':
+      case 'superadmin':
+        return 'Administrador';
+      case '2':
+      case 'vendedor':
+        return 'Vendedor';
+      case '3':
+      case 'gerente':
+        return 'Gerente';
+      case '5':
+      case 'chofer':
+        return 'Chofer';
+      default:
+        return role ?? 'Usuario';
     }
   }
 

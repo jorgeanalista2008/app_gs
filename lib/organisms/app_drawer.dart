@@ -18,6 +18,7 @@ class AppDrawer extends StatelessWidget {
   final String? userEmail;
   final VoidCallback onLogout;
   final VoidCallback onScanPressed;
+  final VoidCallback? onProfileUpdated;
 
   const AppDrawer({
     super.key,
@@ -27,6 +28,7 @@ class AppDrawer extends StatelessWidget {
     required this.userEmail,
     required this.onLogout,
     required this.onScanPressed,
+    this.onProfileUpdated,
   });
 
   // Mapeo de roles por nombre
@@ -104,7 +106,7 @@ class AppDrawer extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const ProfilePage()),
-              );
+              ).then((_) => onProfileUpdated?.call());
             },
           ),
 
