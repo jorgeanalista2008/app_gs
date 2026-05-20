@@ -88,7 +88,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.backgroundColor ?? Colors.grey[100],
+      backgroundColor: AppColors.backgroundColor,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -129,9 +129,9 @@ class _LoginPageState extends State<LoginPage> {
               // Subtítulo
               Text(
                 'Iniciar Sesión',
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 16,
-                  color: Colors.grey[600],
+                  color: AppColors.textSecondary,
                 ),
               ),
               const SizedBox(height: 40),
@@ -194,7 +194,7 @@ class _LoginPageState extends State<LoginPage> {
                 '© ${DateTime.now().year} Grupo Solsumed, CA',
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey[400],
+                  color: AppColors.textSecondary.withOpacity(0.6),
                 ),
               ),
             ],
