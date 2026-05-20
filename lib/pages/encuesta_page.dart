@@ -9,6 +9,10 @@ import '../services/location_service.dart';
 import '../atoms/photo_capture_widget.dart';
 import '../atoms/app_button.dart';
 
+import 'dart:convert';
+import '../services/database_helper.dart';
+import '../services/connectivity_service.dart';
+import 'dart:async'; // Para TimeoutException
 
 class EncuestaPage extends StatefulWidget {
   final VisitaModel visita;
@@ -87,41 +91,65 @@ class _EncuestaPageState extends State<EncuestaPage> {
     }
   }
 
-   void _enviarEncuesta() async {
-    if (_formKey.currentState?.validate() != true) return;
+ void _enviarEncuesta() async {
+  if (_formKey.currentState?.validate() != true) return;
 
-    // Verificar preguntas requeridas
-    if (_encuesta != null) {
-      for (var pregunta in _encuesta!.questions) {
-        if (pregunta.isRequired &&
-            (_respuestas[pregunta.id] == null ||
-            _respuestas[pregunta.id].toString().isEmpty)) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('La pregunta "${pregunta.description}" es obligatoria'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          return;
-        }
+  // Verificar preguntas requeridas
+  if (_encuesta != null) {
+    for (var pregunta in _encuesta!.questions) {
+      if (pregunta.isRequired &&
+          (_respuestas[pregunta.id] == null ||
+           _respuestas[pregunta.id].toString().isEmpty)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('La pregunta "${pregunta.description}" es obligatoria'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
       }
     }
+  }
 
-    setState(() => _isEnviando = true);
+  setState(() => _isEnviando = true);
 
+  try {
+    // Construir array de respuestas
+    final List<Map<String, dynamic>> arrayRespuestas = [];
+    _respuestas.forEach((preguntaId, valor) {
+      if (valor == null || valor.toString().isEmpty) return;
+      final respuesta = <String, dynamic>{
+        'visit_id': widget.visita.id,
+        'question_id': preguntaId,
+      };
+      if (valor is int) {
+        respuesta['answer_option'] = valor.toString();
+      } else {
+        respuesta['answer_text'] = valor.toString();
+      }
+      arrayRespuestas.add(respuesta);
+    });
+
+    // Primero verificar conexión rápido
+    final conectado = await ConnectivityService.isConnected();
+    
+    if (!conectado) {
+      // OFFLINE DETECTADO - Guardar localmente
+      await _guardarLocalmente(arrayRespuestas);
+      return;
+    }
+
+    // ONLINE - Intentar enviar con timeout corto
     try {
-      final exito = await _encuestaRepo.enviarTodasLasRespuestas(
-        visitId: widget.visita.id,
-        respuestas: _respuestas,
-        lat: _lat,
-        lng: _lng,
-        foto1Path: _foto1?.path,
-        foto2Path: _foto2?.path,
-      );
+      final exito = await _encuestaRepo
+          .enviarEncuesta(
+            visitId: widget.visita.id,
+            respuestas: arrayRespuestas,
+          )
+          .timeout(const Duration(seconds: 10)); // Timeout de 10 segundos
 
       if (mounted) {
         setState(() => _isEnviando = false);
-
         if (exito) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -132,27 +160,66 @@ class _EncuestaPageState extends State<EncuestaPage> {
           );
           Navigator.pop(context, true);
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('❌ Error al enviar la encuesta. Intente de nuevo.'),
-              backgroundColor: Colors.red,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+          // Falló el envío - guardar localmente
+          await _guardarLocalmente(arrayRespuestas);
         }
       }
+    } on TimeoutException {
+      // Timeout - probablemente sin conexión real
+      await _guardarLocalmente(arrayRespuestas);
     } catch (e) {
-      if (mounted) {
-        setState(() => _isEnviando = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      // Error de red - guardar localmente
+      print('Error de red: $e');
+      await _guardarLocalmente(arrayRespuestas);
+    }
+  } catch (e) {
+    if (mounted) {
+      setState(() => _isEnviando = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
     }
   }
+}
+
+Future<void> _guardarLocalmente(List<Map<String, dynamic>> arrayRespuestas) async {
+  try {
+    final db = DatabaseHelper.instance;
+    await db.guardarEncuesta(
+      visitId: widget.visita.id,
+      customerName: widget.visita.customerName,
+      respuestasJson: jsonEncode(arrayRespuestas),
+      lat: _lat,
+      lng: _lng,
+      foto1Path: _foto1?.path,
+      foto2Path: _foto2?.path,
+    );
+
+    if (mounted) {
+      setState(() => _isEnviando = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('📴 Guardado localmente. Se enviará cuando haya conexión.'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      Navigator.pop(context, true);
+    }
+  } catch (e) {
+    print('Error guardando localmente: $e');
+    if (mounted) {
+      setState(() => _isEnviando = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al guardar: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+}
 
   @override
   Widget build(BuildContext context) {

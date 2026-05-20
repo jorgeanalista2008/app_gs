@@ -4,6 +4,8 @@ import '../models/visita_model.dart';
 import '../repositories/visita_repository.dart';
 import '../atoms/app_button.dart';
 import 'encuesta_page.dart';
+import '../services/database_helper.dart';
+import '../services/sync_service.dart';
 
 class VisitasPage extends StatefulWidget {
   const VisitasPage({super.key});
@@ -134,40 +136,138 @@ Color _getPrioridadColor(int priority) {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: const Text('Mis Visitas'),
-        backgroundColor: AppColors.primaryColor,
-        foregroundColor: Colors.white,
-        elevation: 0,
-      ),
-      body: Column(
-        children: [
-          // Cabecera
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.white,
-            child: Row(
+@override
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: Colors.grey[50],
+    appBar: AppBar(
+      title: const Text('Mis Visitas'),
+      backgroundColor: AppColors.primaryColor,
+      foregroundColor: Colors.white,
+      elevation: 0,
+      actions: [
+        // Botón de sincronización con contador
+        FutureBuilder<int>(
+          future: DatabaseHelper.instance.contarPendientes(),
+          builder: (context, snapshot) {
+            final pendientes = snapshot.data ?? 0;
+            return Stack(
               children: [
-                Icon(Icons.calendar_month, color: AppColors.primaryColor),
-                const SizedBox(width: 10),
-                Text(
-                  _mesLabel,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                IconButton(
+                  icon: const Icon(Icons.sync),
+                  tooltip: 'Sincronizar encuestas pendientes',
+                  onPressed: () async {
+                    if (pendientes == 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('✅ No hay encuestas pendientes'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                      return;
+                    }
+                    
+                    // Mostrar loading
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Row(
+                          children: [
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Text('Sincronizando...'),
+                          ],
+                        ),
+                        duration: Duration(seconds: 30),
+                      ),
+                    );
+
+                    final resultado = await SyncService.instance.sincronizarPendientes();
+                    
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            '✅ ${resultado['sincronizadas']} sincronizadas, '
+                            '❌ ${resultado['errores']} errores',
+                          ),
+                          backgroundColor: resultado['errores'] == 0 
+                              ? Colors.green 
+                              : Colors.orange,
+                        ),
+                      );
+                      // Refrescar contador
+                      setState(() {});
+                    }
+                  },
                 ),
-                const Spacer(),
-                _buildStatusFilter(),
+                // Badge contador
+                if (pendientes > 0)
+                  Positioned(
+                    top: 6,
+                    right: 4,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 18,
+                        minHeight: 18,
+                      ),
+                      child: Text(
+                        pendientes > 99 ? '99+' : pendientes.toString(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
               ],
-            ),
+            );
+          },
+        ),
+      ],
+    ),
+    body: Column(
+      children: [
+        // Cabecera
+        Container(
+          padding: const EdgeInsets.all(16),
+          color: Colors.white,
+          child: Row(
+            children: [
+              Icon(Icons.calendar_month, color: AppColors.primaryColor),
+              const SizedBox(width: 10),
+              Text(
+                _mesLabel,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              _buildStatusFilter(),
+            ],
           ),
-          Expanded(child: _buildContent()),
-        ],
-      ),
-    );
-  }
+        ),
+        Expanded(child: _buildContent()),
+      ],
+    ),
+  );
+}
 
   Widget _buildStatusFilter() {
     final pendientes = _visitas.where((v) => v.isPendiente).length;

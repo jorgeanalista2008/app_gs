@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'core/app_theme.dart';
 import 'pages/login_page.dart';
-
+import 'services/sync_service.dart';
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  SyncService.iniciarAutoSync();
   runApp(const MyApp());
 }
 
