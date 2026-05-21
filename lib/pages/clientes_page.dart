@@ -35,7 +35,7 @@ class _ClientesPageState extends State<ClientesPage> {
     });
 
     try {
-      final clientes = await _clienteRepo.getMisClientes(); // <-- CORREGIDO
+      final clientes = await _clienteRepo.getClientes(); // <-- CORREGIDO
       if (mounted) {
         setState(() {
           _clientes = clientes;

@@ -157,16 +157,6 @@ Widget build(BuildContext context) {
                   icon: const Icon(Icons.sync),
                   tooltip: 'Sincronizar encuestas pendientes',
                   onPressed: () async {
-                    if (pendientes == 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('✅ No hay encuestas pendientes'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                      return;
-                    }
-                    
                     // Mostrar loading
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
@@ -181,30 +171,43 @@ Widget build(BuildContext context) {
                               ),
                             ),
                             SizedBox(width: 12),
-                            Text('Sincronizando...'),
+                            Text('Sincronizando datos...'),
                           ],
                         ),
                         duration: Duration(seconds: 30),
                       ),
                     );
 
-                    final resultado = await SyncService.instance.sincronizarPendientes();
+                    // 1. Subir encuestas locales al servidor
+                    final resSubida = await SyncService.instance.marcarTodoSincronizado();
+                    final subidas = resSubida['marcadas'] ?? 0;
+                    final erroresSubida = resSubida['errores'] ?? 0;
+
+                    // 2. Descargar visitas y preguntas del servidor
+                    final resDescarga = await SyncService.instance.descargarDatosFromServer();
+                    final visitasDescargadas = resDescarga['visitas'] ?? 0;
+                    final erroresDescarga = resDescarga['errores'] ?? 0;
                     
                     if (mounted) {
                       ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                      
+                      final totalErrores = erroresSubida + erroresDescarga;
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            '✅ ${resultado['sincronizadas']} sincronizadas, '
-                            '❌ ${resultado['errores']} errores',
+                            'Sincronización completa: '
+                            '⬆️ $subidas enviadas, '
+                            '📥 $visitasDescargadas visitas descargadas'
+                            '${totalErrores > 0 ? " ($totalErrores errores)" : ""}',
                           ),
-                          backgroundColor: resultado['errores'] == 0 
+                          backgroundColor: totalErrores == 0 
                               ? Colors.green 
                               : Colors.orange,
                         ),
                       );
-                      // Refrescar contador
-                      setState(() {});
+
+                      // Refrescar lista de visitas local y contador de badge
+                      _loadVisitas();
                     }
                   },
                 ),

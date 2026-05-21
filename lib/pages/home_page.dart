@@ -4,7 +4,6 @@ import '../organisms/app_drawer.dart';
 import '../organisms/dashboard_content.dart';
 import '../services/auth_service.dart';
 import 'login_page.dart';
-import 'scanner_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -14,17 +13,17 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final AuthService _authService = AuthService();
+  final AuthService _authService = AuthService.instance;
+
   String? _userName;
   String? _userRole;
   String? _userPhoto;
   String? _userEmail;
   bool _isLoading = true;
 
-  // Helpers para verificar roles
-  bool get _isAdmin => _userRole?.toLowerCase() == 'superadmin';
-  bool get _isChofer => _userRole?.toLowerCase() == 'chofer';
-  bool get _canScan => _isAdmin || _isChofer;
+  // Helpers para verificar roles (modo local: admin y vendedor)
+  bool get _isAdmin => _authService.isAdmin;
+  bool get _isVendedor => _authService.isVendedor;
 
   @override
   void initState() {
@@ -40,9 +39,15 @@ class _HomePageState extends State<HomePage> {
           _userName = userData['name'] ?? 'Usuario';
           _userRole = userData['role'] ?? 'Usuario';
           _userPhoto = userData['photo'] ?? 'user.png';
-          _userEmail = userData['email'];
+          _userEmail = userData['email'] ?? '';
           _isLoading = false;
         });
+
+        print('=== HOME PAGE ===');
+        print('Usuario: $_userName');
+        print('Rol: $_userRole');
+        print('Es admin: $_isAdmin');
+        print('================');
       } else {
         if (mounted) {
           Navigator.pushReplacement(
@@ -85,13 +90,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  void _goToScanner() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const ScannerPage()),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -109,15 +107,6 @@ class _HomePageState extends State<HomePage> {
         title: const Text('Inicio'),
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
-        actions: [
-          // Icono de scanner SOLO para Admin y Chofer
-          if (_canScan)
-            IconButton(
-              icon: const Icon(Icons.qr_code_scanner),
-              onPressed: _goToScanner,
-              tooltip: 'Escanear QR',
-            ),
-        ],
       ),
       drawer: AppDrawer(
         userName: _userName ?? 'Usuario',
@@ -125,13 +114,10 @@ class _HomePageState extends State<HomePage> {
         userPhoto: _userPhoto,
         userEmail: _userEmail,
         onLogout: _logout,
-        onScanPressed: _goToScanner,
-        onProfileUpdated: _loadUserData,
       ),
       body: DashboardContent(
         userName: _userName ?? 'Usuario',
         userRole: _userRole ?? 'Usuario',
-        onScanPressed: _goToScanner,
       ),
     );
   }

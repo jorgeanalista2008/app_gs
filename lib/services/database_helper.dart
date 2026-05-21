@@ -19,12 +19,19 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
         await _createTables(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 2) {
+        if (oldVersion < 3) {
+          await db.execute('DROP TABLE IF EXISTS usuarios');
+          await db.execute('DROP TABLE IF EXISTS encuestas');
+          await db.execute('DROP TABLE IF EXISTS preguntas');
+          await db.execute('DROP TABLE IF EXISTS clientes');
+          await db.execute('DROP TABLE IF EXISTS visitas');
+          await db.execute('DROP TABLE IF EXISTS encuestas_visita');
+          await db.execute('DROP TABLE IF EXISTS respuestas_pendientes');
           await _createTables(db);
         }
       },
@@ -32,6 +39,45 @@ class DatabaseHelper {
   }
 
   Future<void> _createTables(Database db) async {
+
+
+      // Tabla de usuarios
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS usuarios (
+      id TEXT PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      full_name TEXT,
+      role TEXT DEFAULT 'vendedor',
+      activo INTEGER DEFAULT 1,
+      fecha_creacion TEXT
+    )
+  ''');
+
+  // Tabla de encuestas (plantillas)
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS encuestas (
+      id TEXT PRIMARY KEY,
+      titulo TEXT NOT NULL,
+      descripcion TEXT,
+      created_by TEXT,
+      fecha_creacion TEXT
+    )
+  ''');
+
+  // Tabla de preguntas
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS preguntas (
+      id TEXT PRIMARY KEY,
+      encuesta_id TEXT NOT NULL,
+      descripcion TEXT NOT NULL,
+      tipo TEXT NOT NULL,
+      es_requerida INTEGER DEFAULT 0,
+      opciones TEXT,
+      orden INTEGER DEFAULT 0,
+      FOREIGN KEY (encuesta_id) REFERENCES encuestas(id)
+    )
+  ''');
     // Tabla de clientes
     await db.execute('''
       CREATE TABLE IF NOT EXISTS clientes (
@@ -68,9 +114,9 @@ class DatabaseHelper {
       )
     ''');
 
-    // Tabla de encuestas/preguntas
+    // Tabla de encuestas/preguntas de visita
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS encuestas (
+      CREATE TABLE IF NOT EXISTS encuestas_visita (
         id TEXT PRIMARY KEY,
         visit_id TEXT NOT NULL,
         salesperson_id TEXT,
@@ -222,7 +268,7 @@ class DatabaseHelper {
     required String questionsJson,
   }) async {
     final db = await database;
-    await db.insert('encuestas', {
+    await db.insert('encuestas_visita', {
       'id': id,
       'visit_id': visitId,
       'salesperson_id': salespersonId,
@@ -236,7 +282,7 @@ class DatabaseHelper {
   Future<Map<String, dynamic>?> getEncuestaByVisitaId(String visitId) async {
     final db = await database;
     final results = await db.query(
-      'encuestas',
+      'encuestas_visita',
       where: 'visit_id = ?',
       whereArgs: [visitId],
       limit: 1,
@@ -315,7 +361,7 @@ class DatabaseHelper {
   Future<int> eliminarVisita(String id) async {
     final db = await database;
     // Eliminar encuesta asociada
-    await db.delete('encuestas', where: 'visit_id = ?', whereArgs: [id]);
+    await db.delete('encuestas_visita', where: 'visit_id = ?', whereArgs: [id]);
     // Eliminar visita
     return await db.delete('visitas', where: 'id = ?', whereArgs: [id]);
   }
@@ -351,5 +397,168 @@ class DatabaseHelper {
     final visitas = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM visitas')) ?? 0;
     final pendientes = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM respuestas_pendientes WHERE sincronizado = 0')) ?? 0;
     return {'clientes': clientes, 'visitas': visitas, 'pendientes': pendientes};
+  }
+
+
+  // ═══════════════════════════════════════════
+  // AUTENTICACIÓN LOCAL
+  // ═══════════════════════════════════════════
+
+  /// Inserta el usuario maestro por defecto (se llama al iniciar la app)
+  Future<void> insertarUsuarioMaestro() async {
+    final db = await database;
+    // Verificar si ya existe
+    final existente = await db.query('usuarios', where: 'username = ?', whereArgs: ['admin']);
+    if (existente.isEmpty) {
+      await db.insert('usuarios', {
+        'id': 'admin-001',
+        'username': 'admin',
+        'password': 'admin123',
+        'full_name': 'Administrador',
+        'role': 'admin',
+        'activo': 1,
+        'fecha_creacion': DateTime.now().toIso8601String(),
+      });
+      print('✅ Usuario maestro creado');
+    }
+
+    final vendedorExistente = await db.query('usuarios', where: 'username = ?', whereArgs: ['vendedor@solsumed']);
+    if (vendedorExistente.isEmpty) {
+      await db.insert('usuarios', {
+        'id': 'vendedor-001',
+        'username': 'vendedor@solsumed',
+        'password': '123456',
+        'full_name': 'Vendedor Principal',
+        'role': 'vendedor',
+        'activo': 1,
+        'fecha_creacion': DateTime.now().toIso8601String(),
+      });
+      print('✅ Usuario vendedor creado');
+    }
+  }
+
+  /// Verifica credenciales de login
+  Future<Map<String, dynamic>?> login(String username, String password) async {
+    final db = await database;
+    final results = await db.query(
+      'usuarios',
+      where: 'username = ? AND password = ? AND activo = 1',
+      whereArgs: [username, password],
+      limit: 1,
+    );
+    return results.isNotEmpty ? results.first : null;
+  }
+
+  /// Inserta un nuevo usuario (vendedor)
+  Future<int> crearUsuario({
+    required String username,
+    required String password,
+    required String fullName,
+    String role = 'vendedor',
+  }) async {
+    final db = await database;
+    final userId = 'usr_${DateTime.now().microsecondsSinceEpoch}';
+    return await db.insert('usuarios', {
+      'id': userId,
+      'username': username,
+      'password': password,
+      'full_name': fullName,
+      'role': role,
+      'activo': 1,
+      'fecha_creacion': DateTime.now().toIso8601String(),
+    });
+  }
+
+  /// Obtiene todos los usuarios
+  Future<List<Map<String, dynamic>>> getUsuarios() async {
+    final db = await database;
+    return await db.query('usuarios', orderBy: 'fecha_creacion DESC');
+  }
+
+  /// Obtiene un usuario por ID
+  Future<Map<String, dynamic>?> getUsuario(String id) async {
+    final db = await database;
+    final results = await db.query('usuarios', where: 'id = ?', whereArgs: [id], limit: 1);
+    return results.isNotEmpty ? results.first : null;
+  }
+
+  /// Elimina un usuario
+  Future<int> eliminarUsuario(String id) async {
+    final db = await database;
+    return await db.delete('usuarios', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ═══════════════════════════════════════════
+  // ADMINISTRACIÓN DE ENCUESTAS (PLANTILLAS)
+  // ═══════════════════════════════════════════
+
+  /// Obtiene todas las plantillas de encuestas
+  Future<List<Map<String, dynamic>>> getPlantillasEncuestas() async {
+    final db = await database;
+    return await db.query('encuestas', orderBy: 'fecha_creacion DESC');
+  }
+
+  /// Guarda una plantilla de encuesta (crear o editar)
+  Future<void> guardarPlantillaEncuesta({
+    required String id,
+    required String titulo,
+    String? descripcion,
+  }) async {
+    final db = await database;
+    await db.insert('encuestas', {
+      'id': id,
+      'titulo': titulo,
+      'descripcion': descripcion,
+      'created_by': 'admin',
+      'fecha_creacion': DateTime.now().toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  /// Elimina una plantilla de encuesta y todas sus preguntas asociadas
+  Future<void> eliminarPlantillaEncuesta(String id) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.delete('preguntas', where: 'encuesta_id = ?', whereArgs: [id]);
+      await txn.delete('encuestas', where: 'id = ?', whereArgs: [id]);
+    });
+  }
+
+  /// Obtiene las preguntas de una plantilla
+  Future<List<Map<String, dynamic>>> getPreguntasByEncuestaId(String encuestaId) async {
+    final db = await database;
+    return await db.query(
+      'preguntas',
+      where: 'encuesta_id = ?',
+      whereArgs: [encuestaId],
+      orderBy: 'orden ASC',
+    );
+  }
+
+  /// Guarda una pregunta en la plantilla
+  Future<void> guardarPreguntaTemplate({
+    required String id,
+    required String encuestaId,
+    required String descripcion,
+    required String tipo,
+    int esRequerida = 0,
+    String? opciones,
+    int orden = 0,
+  }) async {
+    final db = await database;
+    await db.insert('preguntas', {
+      'id': id,
+      'encuesta_id': encuestaId,
+      'descripcion': descripcion,
+      'tipo': tipo,
+      'es_requerida': esRequerida,
+      'opciones': opciones,
+      'orden': orden,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  /// Elimina una pregunta de una plantilla
+  Future<void> eliminarPreguntaTemplate(String id) async {
+    final db = await database;
+    await db.delete('preguntas', where: 'id = ?', whereArgs: [id]);
   }
 }

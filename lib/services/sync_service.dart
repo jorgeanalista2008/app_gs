@@ -1,103 +1,234 @@
 import 'dart:convert';
-import 'package:connectivity_plus/connectivity_plus.dart';
-import 'connectivity_service.dart';
 import 'database_helper.dart';
-import '../repositories/encuesta_repository.dart';
+import 'connectivity_service.dart';
+import '../repositories/generic_repository.dart';
 
 class SyncService {
   static final SyncService instance = SyncService._();
   final DatabaseHelper _db = DatabaseHelper.instance;
-  final EncuestaRepository _encuestaRepo = EncuestaRepository();
 
   SyncService._();
 
-  /// Sincroniza respuestas pendientes y limpia
-  Future<Map<String, int>> sincronizarPendientes() async {
-    int sincronizadas = 0;
+  /// Verifica respuestas guardadas y muestra estadísticas
+  Future<Map<String, int>> verificarPendientes() async {
+    try {
+      final pendientes = await _db.getRespuestasPendientes();
+      final completadas = pendientes.where((r) => r['sincronizado'] == 1).length;
+      final sinEnviar = pendientes.where((r) => r['sincronizado'] == 0).length;
+
+      print('📊 Estado de respuestas:');
+      print('   ✅ Completadas: $completadas');
+      print('   ⏳ Pendientes: $sinEnviar');
+
+      return {
+        'completadas': completadas,
+        'pendientes': sinEnviar,
+        'total': pendientes.length,
+      };
+    } catch (e) {
+      print('❌ Error verificando pendientes: $e');
+      return {'completadas': 0, 'pendientes': 0, 'total': 0};
+    }
+  }
+
+  /// Descarga visitas y preguntas desde el servidor y las guarda localmente
+  Future<Map<String, int>> descargarDatosFromServer() async {
+    int visitasDescargadas = 0;
+    int encuestasDescargadas = 0;
     int errores = 0;
 
     try {
       final conectado = await ConnectivityService.instance.isConnected();
       if (!conectado) {
-        print('📴 Sin conexión. No se puede sincronizar.');
-        return {'sincronizadas': 0, 'errores': 0};
+        print('📴 Sin conexión para descargar datos');
+        return {'visitas': 0, 'encuestas': 0, 'errores': 1};
+      }
+
+      print('📥 Descargando visitas desde el servidor...');
+      final visitas = await GenericRepository.instance.getListOnline<Map<String, dynamic>>(
+        path: '/salesperson/me/schedules',
+        fromJson: (json) => json,
+      );
+
+      if (visitas.isNotEmpty) {
+        await _db.guardarVisitas(visitas);
+        visitasDescargadas = visitas.length;
+        print('✅ $visitasDescargadas visitas guardadas localmente');
+
+        for (var visita in visitas) {
+          final visitaId = visita['id']?.toString();
+          if (visitaId != null) {
+            try {
+              print('📥 Descargando preguntas para visita $visitaId...');
+              final data = await GenericRepository.instance.getByIdOnline<Map<String, dynamic>>(
+                path: '/salesperson/me/schedules/$visitaId/with-questions',
+                fromJson: (json) => json,
+              );
+
+              if (data != null) {
+                final questions = data['questions'] ?? data['questions_json'] ?? data;
+                await _db.guardarEncuestaPreguntas(
+                  id: data['id']?.toString() ?? visitaId,
+                  visitId: visitaId,
+                  salespersonId: data['salesperson_id']?.toString(),
+                  customerId: data['customer_id']?.toString(),
+                  questionsJson: jsonEncode(questions),
+                );
+                encuestasDescargadas++;
+                print('✅ Preguntas guardadas para visita $visitaId');
+              }
+            } catch (e) {
+              errores++;
+              print('❌ Error descargando preguntas para visita $visitaId: $e');
+            }
+          }
+        }
+      }
+    } catch (e) {
+      errores++;
+      print('❌ Error en descargarDatosFromServer: $e');
+    }
+
+    return {
+      'visitas': visitasDescargadas,
+      'encuestas': encuestasDescargadas,
+      'errores': errores,
+    };
+  }
+
+  /// Sube las respuestas pendientes al servidor y las marca como sincronizadas
+  Future<Map<String, int>> marcarTodoSincronizado() async {
+    int marcadas = 0;
+    int errores = 0;
+
+    try {
+      final conectado = await ConnectivityService.instance.isConnected();
+      if (!conectado) {
+        print('📴 Sin conexión para subir datos');
+        return {'marcadas': 0, 'errores': 1};
       }
 
       final pendientes = await _db.getRespuestasPendientes();
-      print('🔄 Sincronizando ${pendientes.length} respuestas pendientes...');
+      print('📦 Subiendo ${pendientes.length} respuestas pendientes...');
 
       for (var respuesta in pendientes) {
         try {
-          final respuestasJson = jsonDecode(respuesta['respuestas_json'] as String);
-          final visitId = respuesta['visit_id'] as String;
+          if (respuesta['sincronizado'] == 0) {
+            final answersList = jsonDecode(respuesta['respuestas_json'] as String);
+            
+            final body = {
+              'visit_id': respuesta['visit_id'],
+              'latitude': respuesta['lat'],
+              'longitude': respuesta['lng'],
+              'photo_1': respuesta['foto1_path'], // base64 string
+              'photo_2': respuesta['foto2_path'], // base64 string
+              'answers': answersList,
+            };
 
-          final exito = await _encuestaRepo.enviarEncuesta(
-            visitId: visitId,
-            respuestas: List<Map<String, dynamic>>.from(respuestasJson),
-          );
+            print('📤 Enviando respuesta para visita ${respuesta['visit_id']}...');
+            final response = await GenericRepository.instance.postOnline<Map<String, dynamic>>(
+              path: '/salesperson/me/answers',
+              body: body,
+              fromJson: (json) => json,
+            );
 
-          if (exito) {
-            await _db.marcarRespuestaSincronizada(respuesta['id'] as int);
-            // Actualizar estado de la visita a COMPLETED
-            await _db.actualizarEstadoVisita(visitId, 'COMPLETED');
-            sincronizadas++;
-            print('✅ Respuesta #${respuesta['id']} sincronizada');
-          } else {
-            errores++;
-            print('❌ Error sincronizando #${respuesta['id']}');
+            if (response != null) {
+              await _db.marcarRespuestaSincronizada(respuesta['id'] as int);
+              await _db.actualizarEstadoVisita(
+                respuesta['visit_id'] as String,
+                'COMPLETED',
+              );
+              marcadas++;
+              print('✅ Respuesta #${respuesta['id']} subida y sincronizada');
+            } else {
+              errores++;
+              print('❌ API rechazó la respuesta #${respuesta['id']}');
+            }
           }
         } catch (e) {
           errores++;
-          print('❌ Error: $e');
+          print('❌ Error subiendo #${respuesta['id']}: $e');
         }
       }
 
-      // Limpiar respuestas sincronizadas
-      if (sincronizadas > 0) {
-        final eliminadas = await _db.eliminarRespuestasSincronizadas();
-        print('🗑️ $eliminadas respuestas eliminadas de la BD local');
+      // Limpiar sincronizadas
+      if (marcadas > 0) {
+        await _db.eliminarRespuestasSincronizadas();
+        await _db.limpiarDatosAntiguos();
       }
 
-      print('📊 Resultado: $sincronizadas sincronizadas, $errores errores');
+      print('📊 $marcadas subidas con éxito, $errores errores');
     } catch (e) {
-      print('❌ Error en sincronización: $e');
+      print('❌ Error en marcarTodoSincronizado: $e');
+      errores++;
     }
 
-    return {'sincronizadas': sincronizadas, 'errores': errores};
+    return {'marcadas': marcadas, 'errores': errores};
   }
 
-  /// Sincroniza todo: clientes, visitas, encuestas
-  Future<void> sincronizarTodo({
-    required List<Map<String, dynamic>> clientes,
-    required List<Map<String, dynamic>> visitas,
-  }) async {
-    // Guardar clientes
-    if (clientes.isNotEmpty) {
-      await _db.guardarClientes(clientes);
-      print('💾 ${clientes.length} clientes guardados localmente');
+  /// Obtiene todas las respuestas para revisión (admin)
+  Future<List<Map<String, dynamic>>> getTodasLasRespuestas() async {
+    try {
+      final db = await _db.database;
+      return await db.query('respuestas_pendientes', orderBy: 'fecha_creacion DESC');
+    } catch (e) {
+      return [];
     }
-
-    // Guardar visitas
-    if (visitas.isNotEmpty) {
-      await _db.guardarVisitas(visitas);
-      print('💾 ${visitas.length} visitas guardadas localmente');
-    }
-
-    // Intentar sincronizar respuestas pendientes
-    await sincronizarPendientes();
-
-    // Limpiar datos antiguos
-    await _db.limpiarDatosAntiguos();
   }
 
-      static void iniciarAutoSync() {
-        ConnectivityService.instance.onConnectivityChanged.listen((ConnectivityResult result) async {
-          final conectado = result == ConnectivityResult.mobile ||
-                            result == ConnectivityResult.wifi;
-          if (conectado) {
-            print('🌐 Conexión recuperada. Iniciando sincronización...');
-            await instance.sincronizarPendientes();
-          }
-        });
-      }
+  /// Obtiene respuestas de una visita específica
+  Future<List<Map<String, dynamic>>> getRespuestasDeVisita(String visitId) async {
+    try {
+      final db = await _db.database;
+      return await db.query(
+        'respuestas_pendientes',
+        where: 'visit_id = ?',
+        whereArgs: [visitId],
+        orderBy: 'fecha_creacion DESC',
+      );
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Limpia todas las respuestas (peligroso, solo admin)
+  Future<bool> limpiarTodo() async {
+    try {
+      final db = await _db.database;
+      await db.delete('respuestas_pendientes');
+      print('🗑️ Todas las respuestas eliminadas');
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Obtiene estadísticas generales
+  Future<Map<String, dynamic>> getEstadisticas() async {
+    try {
+      final db = await _db.database;
+
+      final totalVisitas = await db.rawQuery('SELECT COUNT(*) as total FROM visitas');
+      final visitasPendientes = await db.rawQuery("SELECT COUNT(*) as total FROM visitas WHERE status = 'PENDING'");
+      final visitasCompletadas = await db.rawQuery("SELECT COUNT(*) as total FROM visitas WHERE status = 'COMPLETED'");
+      final totalRespuestas = await db.rawQuery('SELECT COUNT(*) as total FROM respuestas_pendientes');
+      final totalClientes = await db.rawQuery('SELECT COUNT(*) as total FROM clientes');
+
+      return {
+        'visitas_total': totalVisitas.first['total'] ?? 0,
+        'visitas_pendientes': visitasPendientes.first['total'] ?? 0,
+        'visitas_completadas': visitasCompletadas.first['total'] ?? 0,
+        'respuestas_total': totalRespuestas.first['total'] ?? 0,
+        'clientes_total': totalClientes.first['total'] ?? 0,
+      };
+    } catch (e) {
+      return {};
+    }
+  }
+
+  /// Inicia el servicio (sin auto-sync de red)
+  static void iniciar() {
+    print('📦 SyncService local iniciado');
+    instance.verificarPendientes();
+  }
 }

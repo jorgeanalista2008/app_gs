@@ -3,19 +3,15 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../core/app_colors.dart';
 import '../molecules/stat_card.dart';
-import '../molecules/dolar_indicator.dart';
-import '../models/dolar_model.dart';
-import '../pages/driver_page.dart';
+
 
 class DashboardContent extends StatefulWidget {
   final String userName;
-  final VoidCallback onScanPressed;
   final String userRole;
 
   const DashboardContent({
     super.key,
     required this.userName,
-    required this.onScanPressed,
     required this.userRole,
   });
 
@@ -27,12 +23,8 @@ class _DashboardContentState extends State<DashboardContent> {
   Map<String, dynamic>? dolarData;
 
   // Helpers para verificar roles
-  bool get _isAdmin => widget.userRole.toLowerCase() == 'superadmin';
-  bool get _isGerente => widget.userRole.toLowerCase() == 'gerente';
+  bool get _isAdmin => widget.userRole.toLowerCase() == 'superadmin' || widget.userRole.toLowerCase() == 'admin';
   bool get _isVendedor => widget.userRole.toLowerCase() == 'vendedor';
-  bool get _isChofer => widget.userRole.toLowerCase() == 'chofer';
-  bool get _isAdminOrGerente => _isAdmin || _isGerente;
-  bool get _canScan => _isAdmin || _isChofer;
 
   @override
   void initState() {
@@ -76,55 +68,6 @@ class _DashboardContentState extends State<DashboardContent> {
           _buildRoleSpecificCards(),
 
           const SizedBox(height: 30),
-
-          // --- 4. ACCIÓN PRINCIPAL (Escáner) ---
-          // Solo para: Admin y Chofer
-          if (_canScan)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppColors.cardColor,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 15,
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  const Text(
-                    'Acciones Rápidas',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 60,
-                    child: ElevatedButton.icon(
-                      onPressed: widget.onScanPressed,
-                      icon: const Icon(Icons.qr_code_scanner, size: 28),
-                      label: const Text(
-                        'ESCANEAR CÓDIGO',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primaryColor,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
         ],
       ),
     );
@@ -147,24 +90,8 @@ class _DashboardContentState extends State<DashboardContent> {
       );
     }
 
-    // CHOFER
-    if (_isChofer) {
-      return StatCard(
-        title: 'Viajes Asignados',
-        value: 'Ver Mis Viajes',
-        icon: Icons.local_shipping,
-        iconColor: Colors.greenAccent,
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const DriverPage()),
-          );
-        },
-      );
-    }
-
-    // ADMIN o GERENTE - Vista general con múltiples tarjetas
-    if (_isAdminOrGerente) {
+    // ADMIN - Vista general con múltiples tarjetas
+    if (_isAdmin) {
       return Column(
         children: [
           Row(
@@ -228,13 +155,12 @@ class _DashboardContentState extends State<DashboardContent> {
   // Nombre descriptivo del rol
   String _getRoleDisplayName() {
     switch (widget.userRole.toLowerCase()) {
-      case 'superadmin': return 'Administrador';
-      case 'vendedor': return 'Vendedor';
-      case 'gerente': return 'Gerente';
-      case 'cliente': return 'Cliente';
-      case 'chofer': return 'Chofer';
-      case 'jefe de almacén': return 'Jefe de Almacén';
-      default: return widget.userRole;
+      case 'superadmin':
+      case 'admin':
+        return 'Administrador';
+      case 'vendedor':
+      default:
+        return 'Vendedor';
     }
   }
 }

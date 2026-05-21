@@ -1,93 +1,85 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/login_response_model.dart';
-import '../core/env.dart';
+import 'database_helper.dart';
 
 class AuthService {
-  static const String _tokenKey = 'access_token';
+  static final AuthService instance = AuthService._();
+  AuthService._();
+
+  final DatabaseHelper _db = DatabaseHelper.instance;
+
   static const String _userDataKey = 'user_data';
-  static const String _sessionIdKey = 'session_id';
+  static const String _isLoggedInKey = 'is_logged_in';
 
-Future<LoginResponseModel> login(String identifier, String password) async {
-  final url = Uri.parse('${Env.apiBaseUrl}/auth/login');
-  final response = await http.post(
-    url,
-    body: jsonEncode({'identifier': identifier, 'password': password}),
-    headers: {'Content-Type': 'application/json'},
-  );
+  Map<String, dynamic>? _currentUser;
 
-  if (response.statusCode == 201) {
-    // Directamente parsear la respuesta, sin verificar 'status'
-    final loginResponse = LoginResponseModel.fromJson(jsonDecode(response.body));
-    await _saveSession(loginResponse);
-    return loginResponse;
-  } else {
-    final error = jsonDecode(response.body);
-    throw Exception(error['message'] ?? 'Error de autenticación');
-  }
-}
+  Map<String, dynamic>? get currentUser => _currentUser;
+  bool get isLoggedIn => _currentUser != null;
+  bool get isAdmin => _currentUser?['role'] == 'admin';
+  bool get isVendedor => _currentUser?['role'] == 'vendedor';
+  String? get userId => _currentUser?['id']?.toString();
+  String? get userName => _currentUser?['full_name']?.toString();
+  String? get userRole => _currentUser?['role']?.toString();
 
-  Future<void> _saveSession(LoginResponseModel response) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, response.accessToken);
-    await prefs.setString(_sessionIdKey, response.sessionId);
-    await prefs.setString(_userDataKey, jsonEncode({
-      'id': response.user.id,
-      'name': response.user.fullName,
-      'email': response.user.email,
-      'role': response.user.role.name,
-      'photo': '', // Mostrar iniciales por defecto, editable por el usuario
-      'branch_id': response.user.branchId,
-      'tenant_id': response.user.tenantId,
-    }));
-  }
-
-  Future<Map<String, dynamic>?> getUserData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userData = prefs.getString(_userDataKey);
-    if (userData != null) {
-      return jsonDecode(userData);
+  Future<bool> login(String username, String password) async {
+    final user = await _db.login(username, password);
+    if (user != null) {
+      _currentUser = user;
+      await _saveSession(user);
+      return true;
     }
-    return null;
-  }
-
-  Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_tokenKey);
-  }
-
-  Future<bool> isLoggedIn() async {
-    final token = await getToken();
-    return token != null && token.isNotEmpty;
+    return false;
   }
 
   Future<void> logout() async {
+    _currentUser = null;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_tokenKey);
     await prefs.remove(_userDataKey);
-    await prefs.remove(_sessionIdKey);
+    await prefs.setBool(_isLoggedInKey, false);
   }
 
-/// Obtiene el ID del usuario logueado
-  Future<String?> getUserId() async {
+  Future<bool> tryAutoLogin() async {
     final prefs = await SharedPreferences.getInstance();
-    final userData = prefs.getString(_userDataKey);
-    if (userData != null) {
-      final data = jsonDecode(userData);
-      return data['id']?.toString();
+    final isLoggedIn = prefs.getBool(_isLoggedInKey) ?? false;
+    if (isLoggedIn) {
+      final userData = prefs.getString(_userDataKey);
+      if (userData != null) {
+        try {
+          final user = jsonDecode(userData) as Map<String, dynamic>;
+          final dbUser = await _db.getUsuario(user['id']?.toString() ?? '');
+          if (dbUser != null && dbUser['activo'] == 1) {
+            _currentUser = dbUser;
+            return true;
+          }
+        } catch (e) {
+          print('Error restaurando sesión: $e');
+        }
+      }
     }
-    return null;
+    return false;
   }
 
-  /// Obtiene el tenant ID
-  Future<String?> getTenantId() async {
+  Future<void> _saveSession(Map<String, dynamic> user) async {
     final prefs = await SharedPreferences.getInstance();
-    final userData = prefs.getString(_userDataKey);
-    if (userData != null) {
-      final data = jsonDecode(userData);
-      return data['tenant_id']?.toString();
-    }
-    return null;
+    await prefs.setBool(_isLoggedInKey, true);
+    await prefs.setString(_userDataKey, jsonEncode({
+      'id': user['id'],
+      'username': user['username'],
+      'full_name': user['full_name'],
+      'role': user['role'],
+    }));
+  }
+
+  Future<String?> getToken() async => _currentUser?['id']?.toString();
+
+  Future<Map<String, dynamic>?> getUserData() async {
+    if (_currentUser == null) return null;
+    return {
+      'id': _currentUser!['id'],
+      'name': _currentUser!['full_name'],
+      'email': _currentUser!['username'],
+      'role': _currentUser!['role'],
+      'photo': 'user.png',
+    };
   }
 }

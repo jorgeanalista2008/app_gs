@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../models/visita_model.dart';
@@ -6,13 +7,9 @@ import '../models/encuesta_model.dart';
 import '../models/pregunta_model.dart';
 import '../repositories/encuesta_repository.dart';
 import '../services/location_service.dart';
+import '../services/database_helper.dart';
 import '../atoms/photo_capture_widget.dart';
 import '../atoms/app_button.dart';
-
-import 'dart:convert';
-import '../services/database_helper.dart';
-import '../services/connectivity_service.dart';
-import 'dart:async'; // Para TimeoutException
 
 class EncuestaPage extends StatefulWidget {
   final VisitaModel visita;
@@ -25,6 +22,7 @@ class EncuestaPage extends StatefulWidget {
 
 class _EncuestaPageState extends State<EncuestaPage> {
   final EncuestaRepository _encuestaRepo = EncuestaRepository();
+  final DatabaseHelper _db = DatabaseHelper.instance;
   final _formKey = GlobalKey<FormState>();
 
   // Encuesta
@@ -42,6 +40,8 @@ class _EncuestaPageState extends State<EncuestaPage> {
   // Fotos
   File? _foto1;
   File? _foto2;
+  String? _foto1Base64;
+  String? _foto2Base64;
 
   // Estado
   bool _isEnviando = false;
@@ -70,194 +70,114 @@ class _EncuestaPageState extends State<EncuestaPage> {
     }
   }
 
- Future<void> _loadEncuesta() async {
-  setState(() => _isLoadingEncuesta = true);
+  Future<void> _loadEncuesta() async {
+    setState(() => _isLoadingEncuesta = true);
 
-  // Verificar conexión primero
-  final conectado = await ConnectivityService.instance.isConnected();
-  
-  if (!conectado) {
-    // Intentar cargar de SQLite
-    final db = DatabaseHelper.instance;
-    final encuestaLocal = await db.getEncuestaByVisitaId(widget.visita.id);
-    
-    if (encuestaLocal != null && mounted) {
-      // Cargar preguntas desde SQLite
-      final questionsJson = jsonDecode(encuestaLocal['questions_json'] as String);
-      // ... reconstruir EncuestaModel
-      setState(() => _isLoadingEncuesta = false);
-    } else {
+    try {
+      // Cargar desde SQLite local
+      final encuesta = await _encuestaRepo.getEncuesta(widget.visita.id);
+      
+      if (mounted) {
+        if (encuesta != null && encuesta.questions.isNotEmpty) {
+          setState(() {
+            _encuesta = encuesta;
+            _isLoadingEncuesta = false;
+          });
+          print('✅ Encuesta cargada localmente: ${encuesta.questions.length} preguntas');
+        } else {
+          setState(() => _isLoadingEncuesta = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⚠️ No hay preguntas asignadas a esta visita.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
       if (mounted) {
         setState(() => _isLoadingEncuesta = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('📴 Sin conexión. No hay datos locales para esta visita.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-    }
-    return;
-  }
-
-  // Online: cargar de API
-  try {
-    final encuesta = await _encuestaRepo.getEncuesta(widget.visita.id);
-    if (mounted) {
-      setState(() {
-        _encuesta = encuesta;
-        _isLoadingEncuesta = false;
-      });
-      
-      // Guardar en SQLite para offline
-      if (encuesta != null) {
-        final db = DatabaseHelper.instance;
-        await db.guardarEncuestaPreguntas(
-          id: encuesta.id,
-          visitId: widget.visita.id,
-          questionsJson: jsonEncode(encuesta.questions.map((q) => q.toJson()).toList()),
-        );
-      }
-    }
-  } catch (e) {
-    if (mounted) {
-      setState(() => _isLoadingEncuesta = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al cargar preguntas: $e'), backgroundColor: Colors.red),
-      );
-    }
-  }
-}
-
- void _enviarEncuesta() async {
-  if (_formKey.currentState?.validate() != true) return;
-
-  // Verificar preguntas requeridas
-  if (_encuesta != null) {
-    for (var pregunta in _encuesta!.questions) {
-      if (pregunta.isRequired &&
-          (_respuestas[pregunta.id] == null ||
-           _respuestas[pregunta.id].toString().isEmpty)) {
-        ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('La pregunta "${pregunta.description}" es obligatoria'),
+            content: Text('Error al cargar preguntas: $e'),
             backgroundColor: Colors.red,
           ),
         );
-        return;
       }
     }
   }
 
-  setState(() => _isEnviando = true);
+  void _enviarEncuesta() async {
+    if (_formKey.currentState?.validate() != true) return;
 
-  try {
-    // Construir array de respuestas
-    final List<Map<String, dynamic>> arrayRespuestas = [];
-    _respuestas.forEach((preguntaId, valor) {
-      if (valor == null || valor.toString().isEmpty) return;
-      final respuesta = <String, dynamic>{
-        'visit_id': widget.visita.id,
-        'question_id': preguntaId,
-      };
-      if (valor is int) {
-        respuesta['answer_option'] = valor.toString();
-      } else {
-        respuesta['answer_text'] = valor.toString();
+    // Verificar preguntas requeridas
+    if (_encuesta != null) {
+      for (var pregunta in _encuesta!.questions) {
+        if (pregunta.isRequired &&
+            (_respuestas[pregunta.id] == null ||
+             _respuestas[pregunta.id].toString().isEmpty)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('La pregunta "${pregunta.description}" es obligatoria'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
       }
-      arrayRespuestas.add(respuesta);
-    });
-
-    // Primero verificar conexión rápido
-    final conectado = await ConnectivityService.instance.isConnected();
-    
-    if (!conectado) {
-      // OFFLINE DETECTADO - Guardar localmente
-      await _guardarLocalmente(arrayRespuestas);
-      return;
     }
 
-    // ONLINE - Intentar enviar con timeout corto
+    setState(() => _isEnviando = true);
+
     try {
-      final exito = await _encuestaRepo
-          .enviarEncuesta(
-            visitId: widget.visita.id,
-            respuestas: arrayRespuestas,
-          )
-          .timeout(const Duration(seconds: 10)); // Timeout de 10 segundos
+      // Guardar respuestas localmente
+      final exito = await _encuestaRepo.guardarRespuestas(
+        visitId: widget.visita.id,
+        customerName: widget.visita.customerName,
+        respuestas: _respuestas,
+        lat: _lat,
+        lng: _lng,
+        foto1Path: _foto1Base64,
+        foto2Path: _foto2Base64,
+      );
 
       if (mounted) {
         setState(() => _isEnviando = false);
+
         if (exito) {
+          // Actualizar estado de la visita a COMPLETED
+          await _db.actualizarEstadoVisita(widget.visita.id, 'COMPLETED');
+
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('✅ Encuesta enviada correctamente'),
+              content: Text('✅ Encuesta guardada correctamente'),
               backgroundColor: Colors.green,
               behavior: SnackBarBehavior.floating,
             ),
           );
           Navigator.pop(context, true);
         } else {
-          // Falló el envío - guardar localmente
-          await _guardarLocalmente(arrayRespuestas);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ No se pudo guardar la encuesta. Intente de nuevo.'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
         }
       }
-    } on TimeoutException {
-      // Timeout - probablemente sin conexión real
-      await _guardarLocalmente(arrayRespuestas);
     } catch (e) {
-      // Error de red - guardar localmente
-      print('Error de red: $e');
-      await _guardarLocalmente(arrayRespuestas);
-    }
-  } catch (e) {
-    if (mounted) {
-      setState(() => _isEnviando = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-      );
-    }
-  }
-}
-
-Future<void> _guardarLocalmente(List<Map<String, dynamic>> arrayRespuestas) async {
-  try {
-    final db = DatabaseHelper.instance;
-    await db.guardarRespuesta(  // ← CAMBIADO: guardarRespuesta en lugar de guardarEncuesta
-      visitId: widget.visita.id,
-      customerName: widget.visita.customerName,
-      respuestasJson: jsonEncode(arrayRespuestas),
-      lat: _lat,
-      lng: _lng,
-      foto1Path: _foto1?.path,
-      foto2Path: _foto2?.path,
-    );
-
-    if (mounted) {
-      setState(() => _isEnviando = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('📴 Guardado localmente. Se enviará cuando haya conexión.'),
-          backgroundColor: Colors.orange,
-          behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 3),
-        ),
-      );
-      Navigator.pop(context, true);
-    }
-  } catch (e) {
-    print('Error guardando localmente: $e');
-    if (mounted) {
-      setState(() => _isEnviando = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al guardar: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        setState(() => _isEnviando = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -269,7 +189,7 @@ Future<void> _guardarLocalmente(List<Map<String, dynamic>> arrayRespuestas) asyn
         foregroundColor: Colors.white,
         elevation: 0,
       ),
-          body: _isLoadingEncuesta
+      body: _isLoadingEncuesta
           ? const Center(child: CircularProgressIndicator(color: AppColors.primaryColor))
           : Form(
               key: _formKey,
@@ -280,13 +200,12 @@ Future<void> _guardarLocalmente(List<Map<String, dynamic>> arrayRespuestas) asyn
                   children: [
                     _buildHeaderVisita(),
                     const SizedBox(height: 24),
-                    // _buildGpsSection(), ← QUITAR ESTA LÍNEA
                     _buildPreguntasSection(),
                     const SizedBox(height: 24),
                     _buildFotosSection(),
                     const SizedBox(height: 32),
                     AppButton(
-                      text: 'ENVIAR ENCUESTA',
+                      text: 'GUARDAR ENCUESTA',
                       onPressed: _enviarEncuesta,
                       isLoading: _isEnviando,
                     ),
@@ -342,67 +261,6 @@ Future<void> _guardarLocalmente(List<Map<String, dynamic>> arrayRespuestas) asyn
             decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
             child: const Text('Pendiente', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.orange)),
           ),
-        ],
-      ),
-    );
-  }
-
-  // ─── GPS ───
-  Widget _buildGpsSection() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey[100]!)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 34, height: 34,
-                decoration: BoxDecoration(color: AppColors.primaryColor.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
-                child: const Icon(Icons.location_on, color: AppColors.primaryColor, size: 18),
-              ),
-              const SizedBox(width: 10),
-              const Text('Ubicación actual', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-              const Spacer(),
-              IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _isLoadingLocation ? null : _getCurrentLocation),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (_isLoadingLocation)
-            const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: AppColors.primaryColor)))
-          else if (_lat != null && _lng != null)
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: Colors.green.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green.withOpacity(0.15))),
-              child: Row(
-                children: [
-                  Icon(Icons.check_circle, size: 20, color: Colors.green[700]),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Lat: ${_lat!.toStringAsFixed(6)}', style: TextStyle(fontSize: 13, color: Colors.grey[700], fontFamily: 'monospace')),
-                        Text('Lng: ${_lng!.toStringAsFixed(6)}', style: TextStyle(fontSize: 13, color: Colors.grey[700], fontFamily: 'monospace')),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: Colors.red.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.red.withOpacity(0.15))),
-              child: Row(
-                children: [
-                  Icon(Icons.error_outline, size: 20, color: Colors.red[700]),
-                  const SizedBox(width: 10),
-                  const Text('No se pudo obtener la ubicación', style: TextStyle(color: Colors.red)),
-                ],
-              ),
-            ),
         ],
       ),
     );
@@ -468,7 +326,6 @@ Future<void> _guardarLocalmente(List<Map<String, dynamic>> arrayRespuestas) asyn
     );
   }
 
-  // ─── Input tipo RATING (estrellas) ───
   Widget _buildRatingInput(PreguntaModel pregunta) {
     final rating = (_respuestas[pregunta.id] as int?) ?? 0;
 
@@ -487,7 +344,6 @@ Future<void> _guardarLocalmente(List<Map<String, dynamic>> arrayRespuestas) asyn
     );
   }
 
-  // ─── Input tipo TEXTO ───
   Widget _buildTextInput(PreguntaModel pregunta) {
     return TextFormField(
       maxLines: 3,
@@ -504,7 +360,6 @@ Future<void> _guardarLocalmente(List<Map<String, dynamic>> arrayRespuestas) asyn
     );
   }
 
-  // ─── Input tipo MULTIPLE CHOICE ───
   Widget _buildMultipleChoiceInput(PreguntaModel pregunta) {
     final seleccionada = _respuestas[pregunta.id] as String?;
 
@@ -558,11 +413,23 @@ Future<void> _guardarLocalmente(List<Map<String, dynamic>> arrayRespuestas) asyn
         Row(
           children: [
             Expanded(
-              child: PhotoCaptureWidget(label: 'Foto del local', onPhotoTaken: (file) => _foto1 = file),
+              child: PhotoCaptureWidget(
+                label: 'Foto del local',
+                onPhotoTaken: (file, base64) {
+                  _foto1 = file;
+                  _foto1Base64 = base64;
+                },
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: PhotoCaptureWidget(label: 'Foto adicional', onPhotoTaken: (file) => _foto2 = file),
+              child: PhotoCaptureWidget(
+                label: 'Foto adicional',
+                onPhotoTaken: (file, base64) {
+                  _foto2 = file;
+                  _foto2Base64 = base64;
+                },
+              ),
             ),
           ],
         ),

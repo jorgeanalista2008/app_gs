@@ -18,18 +18,12 @@ class ProfileHeader extends StatelessWidget {
     switch (role?.toLowerCase()) {
       case '1':
       case 'superadmin':
+      case 'admin':
         return 'Administrador';
       case '2':
       case 'vendedor':
-        return 'Vendedor';
-      case '3':
-      case 'gerente':
-        return 'Gerente';
-      case '5':
-      case 'chofer':
-        return 'Chofer';
       default:
-        return role ?? 'Usuario';
+        return 'Vendedor';
     }
   }
 
