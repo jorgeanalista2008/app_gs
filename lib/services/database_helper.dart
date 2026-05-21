@@ -435,6 +435,63 @@ class DatabaseHelper {
       });
       print('✅ Usuario vendedor creado');
     }
+
+    // Sembrar visitas de prueba si no existen
+    final visitasExistentes = await db.query('visitas');
+    if (visitasExistentes.isEmpty) {
+      final now = DateTime.now();
+      final yearStr = now.year.toString();
+      final monthStr = now.month.toString().padLeft(2, '0');
+
+      await db.insert('visitas', {
+        'id': 'visita-001',
+        'customer_id': 'cli-001',
+        'customer_name': 'Farmacia Central, C.A.',
+        'address': 'Av. Bolívar con Calle 10, Edif. Central',
+        'city': 'Caracas',
+        'code_client_profit': 'CLI-001',
+        'tax_id': 'J-12345678-9',
+        'visit_date_from': '$yearStr-$monthStr-01',
+        'visit_date_to': '$yearStr-$monthStr-28',
+        'notes': 'Revisar inventario de medicamentos de alta rotación.',
+        'priority': 1,
+        'status': 'PENDING',
+        'sincronizado': 0,
+      });
+
+      await db.insert('visitas', {
+        'id': 'visita-002',
+        'customer_id': 'cli-002',
+        'customer_name': 'Droguería El Camino',
+        'address': 'Zona Industrial Cloris, Galpón 4',
+        'city': 'Guarenas',
+        'code_client_profit': 'CLI-002',
+        'tax_id': 'J-98765432-1',
+        'visit_date_from': '$yearStr-$monthStr-02',
+        'visit_date_to': '$yearStr-$monthStr-28',
+        'notes': 'Presentar catálogo de nuevos productos médicos.',
+        'priority': 2,
+        'status': 'PENDING',
+        'sincronizado': 0,
+      });
+
+      await db.insert('visitas', {
+        'id': 'visita-003',
+        'customer_id': 'cli-003',
+        'customer_name': 'Clínica San Gabriel',
+        'address': 'Urb. Las Mercedes, Av. Principal',
+        'city': 'Caracas',
+        'code_client_profit': 'CLI-003',
+        'tax_id': 'J-45678901-2',
+        'visit_date_from': '$yearStr-$monthStr-03',
+        'visit_date_to': '$yearStr-$monthStr-28',
+        'notes': 'Cobro de facturas pendientes.',
+        'priority': 3,
+        'status': 'PENDING',
+        'sincronizado': 0,
+      });
+      print('✅ Visitas de prueba sembradas');
+    }
   }
 
   /// Verifica credenciales de login

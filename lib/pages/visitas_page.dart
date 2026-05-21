@@ -371,18 +371,7 @@ Widget build(BuildContext context) {
       elevation: visita.isPendiente ? 3 : 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: InkWell(
-       onTap: () async {
-            final resultado = await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => EncuestaPage(visita: visita),
-              ),
-            );
-            // Si se envió la encuesta, actualizar la lista
-            if (resultado == true) {
-              _loadVisitas();
-            }
-          },
+        onTap: () => _onVisitaTapped(visita),
         borderRadius: BorderRadius.circular(14),
         child: Container(
           decoration: BoxDecoration(
@@ -565,6 +554,143 @@ Widget build(BuildContext context) {
           ),
         ),
       ),
+    );
+  }
+
+  void _onVisitaTapped(VisitaModel visita) async {
+    if (visita.isCompletada) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Esta visita ya ha sido completada.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Obtener plantillas de encuestas disponibles
+    final plantillas = await DatabaseHelper.instance.getPlantillasEncuestas();
+
+    if (!mounted) return;
+
+    if (plantillas.isEmpty) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.orange),
+              SizedBox(width: 10),
+              Text('Sin Encuestas', style: TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Text(
+            'El administrador no ha configurado ninguna encuesta en el sistema.\n\nPor favor, contacte al administrador para crear una encuesta y sus preguntas desde el panel de administración.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Entendido'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // Mostrar modal con las encuestas disponibles
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Seleccionar Encuesta',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Selecciona la encuesta a aplicar para ${visita.customerName}',
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: plantillas.length,
+                  itemBuilder: (context, index) {
+                    final p = plantillas[index];
+                    final id = p['id'] as String;
+                    final titulo = p['titulo'] ?? 'Encuesta sin título';
+                    final desc = p['descripcion'] ?? '';
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: Colors.grey[200]!),
+                      ),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: AppColors.primaryColor.withOpacity(0.1),
+                          child: const Icon(Icons.assignment_outlined, color: AppColors.primaryColor),
+                        ),
+                        title: Text(
+                          titulo,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
+                        ),
+                        subtitle: desc.isNotEmpty
+                            ? Text(
+                                desc,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                              )
+                            : null,
+                        trailing: const Icon(Icons.chevron_right, size: 20, color: AppColors.primaryColor),
+                        onTap: () async {
+                          Navigator.pop(context); // Cerrar bottom sheet
+
+                          final resultado = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => EncuestaPage(
+                                visita: visita,
+                                plantillaId: id,
+                                plantillaTitulo: titulo,
+                              ),
+                            ),
+                          );
+
+                          if (resultado == true) {
+                            _loadVisitas();
+                          }
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

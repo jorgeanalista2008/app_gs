@@ -33,6 +33,69 @@ class EncuestaRepository {
     }
   }
 
+  /// Obtiene una encuesta (plantilla) por su ID para aplicarla a una visita
+  Future<EncuestaModel?> getPlantillaEncuesta(String plantillaId, String visitaId) async {
+    try {
+      final db = await _db.database;
+      
+      // Obtener la plantilla
+      final plantillaData = await db.query(
+        'encuestas',
+        where: 'id = ?',
+        whereArgs: [plantillaId],
+        limit: 1,
+      );
+      
+      if (plantillaData.isEmpty) return null;
+      
+      // Obtener las preguntas asociadas
+      final preguntasData = await _db.getPreguntasByEncuestaId(plantillaId);
+      
+      final List<PreguntaModel> questions = preguntasData.map((p) {
+        final opcionesStr = p['opciones']?.toString() ?? '';
+        final responseOptions = opcionesStr.isNotEmpty
+            ? opcionesStr.split(',').map((o) => o.trim()).toList()
+            : null;
+            
+        return PreguntaModel(
+          id: p['id']?.toString() ?? '',
+          code: p['id']?.toString() ?? '',
+          description: p['descripcion']?.toString() ?? '',
+          questionType: p['tipo']?.toString() ?? 'TEXT',
+          isRequired: p['es_requerida'] == 1,
+          responseOptions: responseOptions,
+          sortOrder: p['orden'] as int? ?? 0,
+          orderIndex: p['orden'] as int? ?? 0,
+        );
+      }).toList();
+      
+      // Obtener visita para extraer customer_id
+      final visitaResult = await db.query(
+        'visitas',
+        where: 'id = ?',
+        whereArgs: [visitaId],
+        limit: 1,
+      );
+      
+      String customerId = '';
+      if (visitaResult.isNotEmpty) {
+        customerId = visitaResult.first['customer_id']?.toString() ?? '';
+      }
+      
+      return EncuestaModel(
+        id: plantillaId,
+        salespersonId: 'vendedor',
+        customerId: customerId,
+        status: 'PENDING',
+        questions: questions,
+        answers: [],
+      );
+    } catch (e) {
+      print('❌ Error obteniendo plantilla de encuesta: $e');
+      return null;
+    }
+  }
+
   /// Guarda una encuesta con sus preguntas en SQLite
   Future<bool> guardarEncuesta({
     required String id,

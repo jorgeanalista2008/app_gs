@@ -1,5 +1,3 @@
-import 'dart:io';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../models/visita_model.dart';
@@ -13,8 +11,15 @@ import '../atoms/app_button.dart';
 
 class EncuestaPage extends StatefulWidget {
   final VisitaModel visita;
+  final String plantillaId;
+  final String plantillaTitulo;
 
-  const EncuestaPage({super.key, required this.visita});
+  const EncuestaPage({
+    super.key,
+    required this.visita,
+    required this.plantillaId,
+    required this.plantillaTitulo,
+  });
 
   @override
   State<EncuestaPage> createState() => _EncuestaPageState();
@@ -32,14 +37,11 @@ class _EncuestaPageState extends State<EncuestaPage> {
   // GPS
   double? _lat;
   double? _lng;
-  bool _isLoadingLocation = false;
 
   // Respuestas
   final Map<String, dynamic> _respuestas = {};
 
   // Fotos
-  File? _foto1;
-  File? _foto2;
   String? _foto1Base64;
   String? _foto2Base64;
 
@@ -54,19 +56,16 @@ class _EncuestaPageState extends State<EncuestaPage> {
   }
 
   Future<void> _getCurrentLocation() async {
-    setState(() => _isLoadingLocation = true);
-
     try {
       final position = await LocationService.getCurrentLocation();
       if (mounted) {
         setState(() {
           _lat = position?.latitude;
           _lng = position?.longitude;
-          _isLoadingLocation = false;
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _isLoadingLocation = false);
+      // Silently catch geolocation errors or log them if needed
     }
   }
 
@@ -74,8 +73,8 @@ class _EncuestaPageState extends State<EncuestaPage> {
     setState(() => _isLoadingEncuesta = true);
 
     try {
-      // Cargar desde SQLite local
-      final encuesta = await _encuestaRepo.getEncuesta(widget.visita.id);
+      // Cargar desde SQLite local usando la plantilla seleccionada
+      final encuesta = await _encuestaRepo.getPlantillaEncuesta(widget.plantillaId, widget.visita.id);
       
       if (mounted) {
         if (encuesta != null && encuesta.questions.isNotEmpty) {
@@ -184,7 +183,7 @@ class _EncuestaPageState extends State<EncuestaPage> {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('Encuesta de Visita'),
+        title: Text(widget.plantillaTitulo),
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -415,8 +414,7 @@ class _EncuestaPageState extends State<EncuestaPage> {
             Expanded(
               child: PhotoCaptureWidget(
                 label: 'Foto del local',
-                onPhotoTaken: (file, base64) {
-                  _foto1 = file;
+                onPhotoTaken: (_, base64) {
                   _foto1Base64 = base64;
                 },
               ),
@@ -425,8 +423,7 @@ class _EncuestaPageState extends State<EncuestaPage> {
             Expanded(
               child: PhotoCaptureWidget(
                 label: 'Foto adicional',
-                onPhotoTaken: (file, base64) {
-                  _foto2 = file;
+                onPhotoTaken: (_, base64) {
                   _foto2Base64 = base64;
                 },
               ),
