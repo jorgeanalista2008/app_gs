@@ -1,90 +1,46 @@
-import 'dart:async';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
-import '../services/connectivity_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/connectivity_provider.dart';
+import '../providers/sync_provider.dart';
 import '../atoms/offline_banner.dart';
 
-class ConnectionWrapper extends StatefulWidget {
+/// Envuelve una página mostrando el [OfflineBanner] reactivo al estado de red
+/// y de la cola de sync. También dispara snackbars al cambiar conectividad.
+class ConnectionWrapper extends ConsumerStatefulWidget {
   final Widget child;
 
   const ConnectionWrapper({super.key, required this.child});
 
   @override
-  State<ConnectionWrapper> createState() => _ConnectionWrapperState();
+  ConsumerState<ConnectionWrapper> createState() => _ConnectionWrapperState();
 }
 
-class _ConnectionWrapperState extends State<ConnectionWrapper> {
-  final ConnectivityService _connectivityService = ConnectivityService.instance;
-  late StreamSubscription<ConnectivityResult> _subscription;
-  bool _isConnected = true;
-  bool _showOfflineBanner = false;
+class _ConnectionWrapperState extends ConsumerState<ConnectionWrapper> {
+  bool? _lastOnline;
 
-  @override
-  void initState() {
-    super.initState();
-    _checkInitialConnection();
-    _subscription = _connectivityService.onConnectivityChanged.listen(_onConnectionChanged);
+  void _showSnack(BuildContext context, {required bool online}) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(online ? Icons.wifi : Icons.wifi_off,
+                color: Colors.white, size: 18),
+            const SizedBox(width: 8),
+            Text(online
+                ? '🌐 Conexión recuperada'
+                : '📴 Se perdió la conexión a internet'),
+          ],
+        ),
+        backgroundColor: online ? Colors.green : Colors.orange,
+        duration: Duration(seconds: online ? 2 : 3),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
-  Future<void> _checkInitialConnection() async {
-    final conectado = await _connectivityService.isConnected();
-    if (mounted) {
-      setState(() {
-        _isConnected = conectado;
-        _showOfflineBanner = !conectado;
-      });
-    }
-  }
-
-  void _onConnectionChanged(ConnectivityResult result) {
-    final conectado = result == ConnectivityResult.mobile ||
-                      result == ConnectivityResult.wifi ||
-                      result == ConnectivityResult.ethernet;
-
-    if (mounted) {
-      setState(() {
-        _isConnected = conectado;
-        _showOfflineBanner = !conectado;
-      });
-
-      if (conectado) {
-        // Recuperó conexión
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.wifi, color: Colors.white, size: 18),
-                SizedBox(width: 8),
-                Text('🌐 Conexión recuperada'),
-              ],
-            ),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      } else {
-        // Perdió conexión
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.wifi_off, color: Colors.white, size: 18),
-                SizedBox(width: 8),
-                Text('📴 Se perdió la conexión a internet'),
-              ],
-            ),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 3),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
-  }
-
-  void _irModoOffline() {
+  void _goOffline(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('📴 Modo offline activado. Trabajando con datos locales.'),
@@ -95,20 +51,28 @@ class _ConnectionWrapperState extends State<ConnectionWrapper> {
   }
 
   @override
-  void dispose() {
-    _subscription.cancel();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    ref.listen<bool>(isOnlineProvider, (prev, next) {
+      if (_lastOnline == null) {
+        _lastOnline = next;
+        return;
+      }
+      if (next != _lastOnline) {
+        _showSnack(context, online: next);
+        _lastOnline = next;
+      }
+    });
+
+    final isOnline = ref.watch(isOnlineProvider);
+    final sync = ref.watch(syncStateProvider);
+    final showBanner = !isOnline || !sync.isClean;
+
     return Column(
       children: [
-        // Banner offline
-        if (_showOfflineBanner)
-          OfflineBanner(onGoOffline: _irModoOffline),
-
-        // Contenido principal
+        if (showBanner)
+          OfflineBanner(
+            onGoOffline: () => _goOffline(context),
+          ),
         Expanded(child: widget.child),
       ],
     );

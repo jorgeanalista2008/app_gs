@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'conflict_resolver.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
@@ -19,7 +20,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 4,
+      version: 7,
       onCreate: (db, version) async {
         await _createTables(db);
       },
@@ -46,7 +47,6 @@ class DatabaseHelper {
             print('Column tipo already exists in clientes: $e');
           }
         }
-        // En onUpgrade para versión 5:
         if (oldVersion < 5) {
           try {
             await db.execute('ALTER TABLE clientes ADD COLUMN lat REAL');
@@ -57,6 +57,15 @@ class DatabaseHelper {
           try {
             await db.execute('ALTER TABLE clientes ADD COLUMN coordenadas_actualizadas INTEGER DEFAULT 0');
           } catch (e) {}
+          await _createPendingOperationsTable(db);
+        }
+        if (oldVersion < 6) {
+          await _addSyncTimestampColumns(db);
+          await _createSyncConflictsTable(db);
+        }
+        if (oldVersion < 7) {
+          await _addProspectColumns(db);
+          await _createIdMappingTable(db);
         }
       },
     );
@@ -85,7 +94,10 @@ class DatabaseHelper {
       titulo TEXT NOT NULL,
       descripcion TEXT,
       created_by TEXT,
-      fecha_creacion TEXT
+      fecha_creacion TEXT,
+      updated_at TEXT,
+      server_updated_at TEXT,
+      sincronizado INTEGER DEFAULT 0
     )
   ''');
 
@@ -99,6 +111,9 @@ class DatabaseHelper {
       es_requerida INTEGER DEFAULT 0,
       opciones TEXT,
       orden INTEGER DEFAULT 0,
+      updated_at TEXT,
+      server_updated_at TEXT,
+      sincronizado INTEGER DEFAULT 0,
       FOREIGN KEY (encuesta_id) REFERENCES encuestas(id)
     )
   ''');
@@ -115,7 +130,15 @@ class DatabaseHelper {
         activo INTEGER DEFAULT 1,
         tipo TEXT,
         sincronizado INTEGER DEFAULT 0,
-        fecha_sync TEXT
+        fecha_sync TEXT,
+        updated_at TEXT,
+        server_updated_at TEXT,
+        is_prospect INTEGER DEFAULT 0,
+        server_id TEXT,
+        notes TEXT,
+        lat REAL,
+        lng REAL,
+        coordenadas_actualizadas INTEGER DEFAULT 0
       )
     ''');
 
@@ -136,7 +159,9 @@ class DatabaseHelper {
         status TEXT DEFAULT 'PENDING',
         completed_at TEXT,
         sincronizado INTEGER DEFAULT 0,
-        fecha_sync TEXT
+        fecha_sync TEXT,
+        updated_at TEXT,
+        server_updated_at TEXT
       )
     ''');
 
@@ -149,7 +174,9 @@ class DatabaseHelper {
         customer_id TEXT,
         questions_json TEXT,
         sincronizado INTEGER DEFAULT 0,
-        fecha_sync TEXT
+        fecha_sync TEXT,
+        updated_at TEXT,
+        server_updated_at TEXT
       )
     ''');
 
@@ -165,9 +192,111 @@ class DatabaseHelper {
         foto1_path TEXT,
         foto2_path TEXT,
         fecha_creacion TEXT NOT NULL,
-        sincronizado INTEGER DEFAULT 0
+        sincronizado INTEGER DEFAULT 0,
+        updated_at TEXT
       )
     ''');
+
+    await _createPendingOperationsTable(db);
+    await _createSyncConflictsTable(db);
+    await _createIdMappingTable(db);
+  }
+
+  /// Agrega columnas de sync timestamps a tablas existentes (migración v5→v6).
+  Future<void> _addSyncTimestampColumns(Database db) async {
+    const targets = {
+      'clientes': ['updated_at', 'server_updated_at'],
+      'visitas': ['updated_at', 'server_updated_at'],
+      'encuestas_visita': ['updated_at', 'server_updated_at'],
+      'respuestas_pendientes': ['updated_at'],
+      'encuestas': ['updated_at', 'server_updated_at', 'sincronizado'],
+      'preguntas': ['updated_at', 'server_updated_at', 'sincronizado'],
+    };
+    for (final entry in targets.entries) {
+      for (final col in entry.value) {
+        try {
+          final type = col == 'sincronizado' ? 'INTEGER DEFAULT 0' : 'TEXT';
+          await db.execute('ALTER TABLE ${entry.key} ADD COLUMN $col $type');
+        } catch (_) {
+          // ya existe
+        }
+      }
+    }
+  }
+
+  /// Migración v6→v7: columnas para prospectos + mapeo de IDs.
+  Future<void> _addProspectColumns(Database db) async {
+    const cols = {
+      'is_prospect': 'INTEGER DEFAULT 0',
+      'server_id': 'TEXT',
+      'notes': 'TEXT',
+    };
+    for (final entry in cols.entries) {
+      try {
+        await db.execute(
+            'ALTER TABLE clientes ADD COLUMN ${entry.key} ${entry.value}');
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _createIdMappingTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS id_mapping (
+        entity_type TEXT NOT NULL,
+        local_id TEXT NOT NULL,
+        server_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (entity_type, local_id)
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_idmap_server ON id_mapping(entity_type, server_id)',
+    );
+  }
+
+  Future<void> _createSyncConflictsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sync_conflicts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        local_updated_at TEXT,
+        server_updated_at TEXT,
+        resolution TEXT NOT NULL,
+        local_snapshot TEXT,
+        server_snapshot TEXT,
+        resolved_at TEXT NOT NULL,
+        reviewed INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_conflicts_entity ON sync_conflicts(entity_type, entity_id)',
+    );
+  }
+
+  Future<void> _createPendingOperationsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS pending_operations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        entity_type TEXT NOT NULL,
+        entity_local_id TEXT,
+        operation TEXT NOT NULL,
+        http_method TEXT NOT NULL,
+        endpoint TEXT NOT NULL,
+        payload_json TEXT,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        max_attempts INTEGER NOT NULL DEFAULT 10,
+        next_retry_at TEXT NOT NULL,
+        last_error TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        server_response TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_pending_status_retry ON pending_operations(status, next_retry_at)',
+    );
   }
 
   // ═══════════════════════════════════════════
@@ -176,8 +305,33 @@ class DatabaseHelper {
 
   Future<void> guardarClientes(List<Map<String, dynamic>> clientes) async {
     final db = await database;
-    final batch = db.batch();
-    for (var cliente in clientes) {
+    final resolver = ConflictResolver.instance;
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+
+    for (final cliente in clientes) {
+      final id = cliente['id']?.toString();
+      if (id == null || id.isEmpty) continue;
+
+      final existing = await db.query(
+        'clientes',
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      final localRow = existing.isNotEmpty ? existing.first : null;
+
+      final result = await resolver.resolve(
+        entityType: 'customer',
+        entityId: id,
+        localRow: localRow,
+        serverRow: cliente,
+      );
+
+      if (result.action == ConflictAction.keepLocal ||
+          result.action == ConflictAction.noChange) {
+        continue;
+      }
+
       final activeVal = cliente['active'] == true ||
               cliente['active']?.toString() == 'true' ||
               cliente['activo'] == true ||
@@ -187,21 +341,27 @@ class DatabaseHelper {
           ? 1
           : 0;
 
-      batch.insert('clientes', {
-        'id': cliente['id']?.toString(),
-        'name': cliente['name'] ?? 'Sin nombre',
-        'code_client_profit': cliente['code_client_profit'] ?? '',
-        'tax_id': cliente['tax_id'] ?? '',
-        'telefono': cliente['phone']?.toString() ?? cliente['telefono']?.toString() ?? '',
-        'email': cliente['email']?.toString() ?? '',
-        'direccion': cliente['address']?.toString() ?? cliente['direccion']?.toString() ?? '',
-        'activo': activeVal,
-        'tipo': cliente['type']?.toString() ?? cliente['tipo']?.toString() ?? '',
-        'sincronizado': 1,
-        'fecha_sync': DateTime.now().toIso8601String(),
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      final serverUpdatedAtIso = result.serverUpdatedAt?.toIso8601String();
+      await db.insert(
+        'clientes',
+        {
+          'id': id,
+          'name': cliente['name'] ?? 'Sin nombre',
+          'code_client_profit': cliente['code_client_profit'] ?? '',
+          'tax_id': cliente['tax_id'] ?? '',
+          'telefono': cliente['phone']?.toString() ?? cliente['telefono']?.toString() ?? '',
+          'email': cliente['email']?.toString() ?? '',
+          'direccion': cliente['address']?.toString() ?? cliente['direccion']?.toString() ?? '',
+          'activo': activeVal,
+          'tipo': cliente['type']?.toString() ?? cliente['tipo']?.toString() ?? '',
+          'sincronizado': 1,
+          'fecha_sync': nowIso,
+          'updated_at': serverUpdatedAtIso ?? nowIso,
+          'server_updated_at': serverUpdatedAtIso,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
     }
-    await batch.commit(noResult: true);
   }
 
   Future<List<Map<String, dynamic>>> getClientes() async {
@@ -225,27 +385,58 @@ class DatabaseHelper {
 
   Future<void> guardarVisitas(List<Map<String, dynamic>> visitas) async {
     final db = await database;
-    final batch = db.batch();
-    for (var visita in visitas) {
-      batch.insert('visitas', {
-        'id': visita['id']?.toString(),
-        'customer_id': visita['customer_id'],
-        'customer_name': visita['customer_name'],
-        'address': visita['address'],
-        'city': visita['city'],
-        'code_client_profit': visita['code_client_profit'],
-        'tax_id': visita['tax_id'],
-        'visit_date_from': visita['visit_date_from'],
-        'visit_date_to': visita['visit_date_to'],
-        'notes': visita['notes'],
-        'priority': visita['priority'] ?? 1,
-        'status': visita['status'] ?? 'PENDING',
-        'completed_at': visita['completed_at'],
-        'sincronizado': 1,
-        'fecha_sync': DateTime.now().toIso8601String(),
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    final resolver = ConflictResolver.instance;
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+
+    for (final visita in visitas) {
+      final id = visita['id']?.toString();
+      if (id == null || id.isEmpty) continue;
+
+      final existing = await db.query(
+        'visitas',
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      final localRow = existing.isNotEmpty ? existing.first : null;
+
+      final result = await resolver.resolve(
+        entityType: 'visit',
+        entityId: id,
+        localRow: localRow,
+        serverRow: visita,
+      );
+
+      if (result.action == ConflictAction.keepLocal ||
+          result.action == ConflictAction.noChange) {
+        continue;
+      }
+
+      final serverUpdatedAtIso = result.serverUpdatedAt?.toIso8601String();
+      await db.insert(
+        'visitas',
+        {
+          'id': id,
+          'customer_id': visita['customer_id'],
+          'customer_name': visita['customer_name'],
+          'address': visita['address'],
+          'city': visita['city'],
+          'code_client_profit': visita['code_client_profit'],
+          'tax_id': visita['tax_id'],
+          'visit_date_from': visita['visit_date_from'],
+          'visit_date_to': visita['visit_date_to'],
+          'notes': visita['notes'],
+          'priority': visita['priority'] ?? 1,
+          'status': visita['status'] ?? 'PENDING',
+          'completed_at': visita['completed_at'],
+          'sincronizado': 1,
+          'fecha_sync': nowIso,
+          'updated_at': serverUpdatedAtIso ?? nowIso,
+          'server_updated_at': serverUpdatedAtIso,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
     }
-    await batch.commit(noResult: true);
   }
 
   Future<List<Map<String, dynamic>>> getVisitas({
@@ -615,5 +806,77 @@ class DatabaseHelper {
   Future<void> eliminarPreguntaTemplate(String id) async {
     final db = await database;
     await db.delete('preguntas', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ═══════════════════════════════════════════
+  // HELPERS DE SYNC
+  // ═══════════════════════════════════════════
+
+  /// Marca un registro local como modificado sin sincronizar.
+  /// Agregar a [data] los campos `updated_at` y `sincronizado = 0` antes de
+  /// llamar a insert/update. Usar en cualquier mutación local que deba luego
+  /// pushearse al servidor.
+  Map<String, dynamic> stampLocalWrite(Map<String, dynamic> data) {
+    final stamped = Map<String, dynamic>.from(data);
+    stamped['updated_at'] = DateTime.now().toUtc().toIso8601String();
+    stamped['sincronizado'] = 0;
+    return stamped;
+  }
+
+  /// Marca un registro como sincronizado tras éxito de push al servidor.
+  /// Llamar después que SyncQueueService confirma 2xx.
+  Future<int> markSyncedAfterPush({
+    required String table,
+    required String idColumn,
+    required dynamic id,
+    DateTime? serverUpdatedAt,
+  }) async {
+    final db = await database;
+    final iso = (serverUpdatedAt ?? DateTime.now().toUtc()).toIso8601String();
+    return db.update(
+      table,
+      {
+        'sincronizado': 1,
+        'fecha_sync': DateTime.now().toIso8601String(),
+        'server_updated_at': iso,
+      },
+      where: '$idColumn = ?',
+      whereArgs: [id],
+    );
+  }
+
+  // ═══════════════════════════════════════════
+  // ID MAPPING (local UUID ↔ server ID)
+  // ═══════════════════════════════════════════
+
+  Future<void> registrarIdMapping({
+    required String entityType,
+    required String localId,
+    required String serverId,
+  }) async {
+    final db = await database;
+    await db.insert(
+      'id_mapping',
+      {
+        'entity_type': entityType,
+        'local_id': localId,
+        'server_id': serverId,
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Resuelve un local_id → server_id. Si no hay mapping retorna null.
+  Future<String?> getServerId(String entityType, String localId) async {
+    final db = await database;
+    final result = await db.query(
+      'id_mapping',
+      columns: ['server_id'],
+      where: 'entity_type = ? AND local_id = ?',
+      whereArgs: [entityType, localId],
+      limit: 1,
+    );
+    return result.isEmpty ? null : result.first['server_id'] as String?;
   }
 }

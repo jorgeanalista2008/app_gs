@@ -5,6 +5,7 @@ import '../repositories/cliente_repository.dart';
 import '../services/auth_service.dart';
 import '../atoms/app_button.dart';
 import '../atoms/app_text_field.dart';
+import 'nuevo_prospecto_page.dart';
 
 class ClientesPage extends StatefulWidget {
   const ClientesPage({super.key});
@@ -13,12 +14,15 @@ class ClientesPage extends StatefulWidget {
   State<ClientesPage> createState() => _ClientesPageState();
 }
 
-class _ClientesPageState extends State<ClientesPage> {
+class _ClientesPageState extends State<ClientesPage>
+    with SingleTickerProviderStateMixin {
   final ClienteRepository _clienteRepo = ClienteRepository();
   final AuthService _authService = AuthService.instance;
   final TextEditingController _searchController = TextEditingController();
+  late final TabController _tabController;
 
   List<ClienteModel> _clientes = [];
+  List<ClienteModel> _prospectos = [];
   List<ClienteModel> _clientesFiltrados = [];
   bool _isLoading = true;
   String? _error;
@@ -26,6 +30,10 @@ class _ClientesPageState extends State<ClientesPage> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) _aplicarFiltro();
+    });
     _loadClientes();
   }
 
@@ -37,12 +45,14 @@ class _ClientesPageState extends State<ClientesPage> {
 
     try {
       final clientes = await _clienteRepo.getClientesLocales();
+      final prospectos = clientes.where((c) => c.isProspect).toList();
       if (mounted) {
         setState(() {
-          _clientes = clientes;
-          _clientesFiltrados = clientes;
+          _clientes = clientes.where((c) => !c.isProspect).toList();
+          _prospectos = prospectos;
           _isLoading = false;
         });
+        _aplicarFiltro();
       }
     } catch (e) {
       if (mounted) {
@@ -51,6 +61,34 @@ class _ClientesPageState extends State<ClientesPage> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  void _aplicarFiltro() {
+    final base = _tabController.index == 0 ? _clientes : _prospectos;
+    final query = _searchController.text.trim().toLowerCase();
+    setState(() {
+      if (query.isEmpty) {
+        _clientesFiltrados = base;
+      } else {
+        _clientesFiltrados = base.where((c) {
+          return c.name.toLowerCase().contains(query) ||
+              c.codeClientProfit.toLowerCase().contains(query) ||
+              c.taxId.toLowerCase().contains(query) ||
+              c.telefono.contains(query);
+        }).toList();
+      }
+    });
+  }
+
+  Future<void> _abrirNuevoProspecto() async {
+    final creado = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const NuevoProspectoPage()),
+    );
+    if (creado == true) {
+      _tabController.animateTo(1);
+      _loadClientes();
     }
   }
 
@@ -94,23 +132,13 @@ class _ClientesPageState extends State<ClientesPage> {
   }
 
   void _filtrarClientes(String query) {
-    setState(() {
-      if (query.isEmpty) {
-        _clientesFiltrados = _clientes;
-      } else {
-        _clientesFiltrados = _clientes.where((cliente) {
-          return cliente.name.toLowerCase().contains(query.toLowerCase()) ||
-                 cliente.codeClientProfit.toLowerCase().contains(query.toLowerCase()) ||
-                 cliente.taxId.toLowerCase().contains(query.toLowerCase()) ||
-                 cliente.telefono.contains(query);
-        }).toList();
-      }
-    });
+    _aplicarFiltro();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -121,6 +149,14 @@ class _ClientesPageState extends State<ClientesPage> {
         title: const Text('Mis Clientes'),
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: Colors.white,
+          tabs: [
+            Tab(text: 'Clientes (${_clientes.length})'),
+            Tab(text: 'Prospectos (${_prospectos.length})'),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.cloud_download),
@@ -128,6 +164,13 @@ class _ClientesPageState extends State<ClientesPage> {
             onPressed: _isLoading ? null : _syncClientes,
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _abrirNuevoProspecto,
+        backgroundColor: AppColors.primaryColor,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.person_add),
+        label: const Text('Prospecto'),
       ),
       body: Column(
         children: [
@@ -152,7 +195,7 @@ class _ClientesPageState extends State<ClientesPage> {
               child: Row(
                 children: [
                   Text(
-                    '${_clientesFiltrados.length} de ${_clientes.length} clientes',
+                    '${_clientesFiltrados.length} de ${(_tabController.index == 0 ? _clientes : _prospectos).length} ${_tabController.index == 0 ? "clientes" : "prospectos"}',
                     style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                   ),
                 ],
@@ -190,26 +233,36 @@ class _ClientesPageState extends State<ClientesPage> {
     }
 
     if (_clientesFiltrados.isEmpty) {
+      final esProspectos = _tabController.index == 1;
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.people_outline, size: 80, color: Colors.grey[300]),
+            Icon(
+              esProspectos ? Icons.person_add_outlined : Icons.people_outline,
+              size: 80,
+              color: Colors.grey[300],
+            ),
             const SizedBox(height: 16),
             Text(
               _searchController.text.isEmpty
-                  ? 'No tienes clientes. Presiona ☁️ para sincronizar.'
-                  : 'No se encontraron clientes',
+                  ? (esProspectos
+                      ? 'No tienes prospectos. Usa el botón + para crear uno.'
+                      : 'No tienes clientes. Presiona ☁️ para sincronizar.')
+                  : 'No se encontraron ${esProspectos ? "prospectos" : "clientes"}',
               style: TextStyle(fontSize: 16, color: Colors.grey[500]),
               textAlign: TextAlign.center,
             ),
-            if (_searchController.text.isEmpty) ...[
+            if (_searchController.text.isEmpty && !esProspectos) ...[
               const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: _syncClientes,
                 icon: const Icon(Icons.cloud_download),
                 label: const Text('Sincronizar Clientes'),
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryColor, foregroundColor: Colors.white),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryColor,
+                  foregroundColor: Colors.white,
+                ),
               ),
             ],
           ],
@@ -274,18 +327,8 @@ class _ClientesPageState extends State<ClientesPage> {
                 ),
               ),
 
-              // Badge de activo
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: cliente.activo ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  cliente.activo ? 'Activo' : 'Inactivo',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cliente.activo ? Colors.green : Colors.red),
-                ),
-              ),
+              // Badge
+              _buildStatusBadge(cliente),
               const SizedBox(width: 8),
               Icon(Icons.chevron_right, color: Colors.grey[400]),
             ],
@@ -350,6 +393,39 @@ class _ClientesPageState extends State<ClientesPage> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildStatusBadge(ClienteModel c) {
+    late Color color;
+    late String text;
+    if (c.isProspect && !c.sincronizado) {
+      color = Colors.orange;
+      text = 'Sin subir';
+    } else if (c.isProspect && c.sincronizado) {
+      color = Colors.blue;
+      text = 'Subido';
+    } else if (c.activo) {
+      color = Colors.green;
+      text = 'Activo';
+    } else {
+      color = Colors.red;
+      text = 'Inactivo';
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
     );
   }
 

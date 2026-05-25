@@ -143,6 +143,39 @@ class GenericRepository {
     }
   }
 
+  /// Ejecuta petición HTTP genérica (POST/PATCH/PUT/DELETE).
+  /// Usado por SyncQueueService para drenar operaciones pendientes.
+  Future<({int statusCode, String body})> executeRequest({
+    required String method,
+    required String endpoint,
+    Map<String, dynamic>? payload,
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    final url = Uri.parse('${Env.apiBaseUrl}$endpoint');
+    final headers = await _getHeaders();
+    final encodedBody = payload == null ? null : jsonEncode(payload);
+
+    http.Response response;
+    switch (method.toUpperCase()) {
+      case 'POST':
+        response = await http.post(url, headers: headers, body: encodedBody).timeout(timeout);
+        break;
+      case 'PATCH':
+        response = await http.patch(url, headers: headers, body: encodedBody).timeout(timeout);
+        break;
+      case 'PUT':
+        response = await http.put(url, headers: headers, body: encodedBody).timeout(timeout);
+        break;
+      case 'DELETE':
+        response = await http.delete(url, headers: headers).timeout(timeout);
+        break;
+      default:
+        throw ArgumentError('Método HTTP no soportado: $method');
+    }
+
+    return (statusCode: response.statusCode, body: response.body);
+  }
+
   /// Parsea respuesta JSON de API
   List<T> _parseResponse<T>(
     String body,

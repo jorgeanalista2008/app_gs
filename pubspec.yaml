@@ -9,7 +9,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  
+
+  # State management
+  flutter_riverpod: ^2.6.0
+
   # UI
   cupertino_icons: ^1.0.8
   fl_chart: ^0.68.0                      # Gráficos estadísticos
@@ -34,6 +37,7 @@ dependencies:
   sqflite: ^2.3.0                         # Base de datos SQLite
   path: ^1.8.0                            # Para rutas de archivos
   connectivity_plus: ^5.0.0               # Detectar conexión a internet
+  uuid: ^4.5.0                            # UUID v4 para IDs locales
 
   flutter_map: ^6.1.0                     # Mapa basado en OpenStreetMap
   latlong2: ^0.9.0                        # Coordenadas
