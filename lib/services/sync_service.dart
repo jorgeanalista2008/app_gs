@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'database_helper.dart';
 import 'connectivity_service.dart';
+import 'auth_service.dart';
 import '../repositories/generic_repository.dart';
 
 class SyncService {
@@ -8,6 +9,95 @@ class SyncService {
   final DatabaseHelper _db = DatabaseHelper.instance;
 
   SyncService._();
+
+  /// Realiza login online con las credenciales dadas para obtener el JWT token
+  Future<bool> authenticateOnline({String? email, String? password}) async {
+    return await _authenticateOnline(email: email, password: password);
+  }
+
+  /// Realiza login online con las credenciales locales del vendedor para obtener el JWT token
+  Future<bool> _authenticateOnline({String? email, String? password}) async {
+    try {
+      String? username = email;
+      String? pass = password;
+
+      if (username == null || pass == null) {
+        final userId = AuthService.instance.userId;
+        if (userId == null) {
+          print('❌ No hay usuario logueado localmente');
+          return false;
+        }
+
+        final userLocal = await _db.getUsuario(userId);
+        if (userLocal == null) {
+          print('❌ No se encontró el usuario local en SQLite');
+          return false;
+        }
+
+        username = userLocal['username'];
+        pass = userLocal['password'];
+      }
+
+      print('🔑 Intentando login online para $username...');
+      final body = {
+        'identifier': username,
+        'password': pass,
+      };
+
+      final response = await GenericRepository.instance.postOnline<Map<String, dynamic>>(
+        path: '/auth/login',
+        body: body,
+        fromJson: (json) => json,
+      );
+
+      if (response != null) {
+        final token = response['access_token'] ?? response['token'] ?? 
+                      (response['data'] is Map ? (response['data']['access_token'] ?? response['data']['token']) : null);
+        
+        if (token != null) {
+          AuthService.instance.onlineToken = token.toString();
+          print('✅ Login online exitoso. JWT guardado.');
+
+          // Si el login fue exitoso y las credenciales provistas o usadas difieren de las guardadas en SQLite para el usuario actual,
+          // o si el usuario actual es el default, actualicemos localmente en SQLite y en AuthService.
+          final userId = AuthService.instance.userId;
+          if (userId != null) {
+            final userLocal = await _db.getUsuario(userId);
+            if (userLocal != null && (userLocal['username'] != username || userLocal['password'] != pass)) {
+              final db = await _db.database;
+              await db.update(
+                'usuarios',
+                {
+                  'username': username,
+                  'password': pass,
+                  if (response['user'] != null && response['user']['full_name'] != null)
+                    'full_name': response['user']['full_name'],
+                },
+                where: 'id = ?',
+                whereArgs: [userId],
+              );
+              print('💾 Credenciales locales de SQLite actualizadas con las online exitosas');
+
+              final updatedUser = Map<String, dynamic>.from(userLocal);
+              updatedUser['username'] = username;
+              updatedUser['password'] = pass;
+              if (response['user'] != null && response['user']['full_name'] != null) {
+                updatedUser['full_name'] = response['user']['full_name'];
+              }
+              await AuthService.instance.updateLocalSession(updatedUser);
+            }
+          }
+          return true;
+        } else {
+          print('❌ Login online exitoso pero no se encontró el campo access_token ni token: $response');
+        }
+      }
+      return false;
+    } catch (e) {
+      print('❌ Excepción durante _authenticateOnline: $e');
+      return false;
+    }
+  }
 
   /// Verifica respuestas guardadas y muestra estadísticas
   Future<Map<String, int>> verificarPendientes() async {
@@ -31,58 +121,36 @@ class SyncService {
     }
   }
 
-  /// Descarga visitas y preguntas desde el servidor y las guarda localmente
-  Future<Map<String, int>> descargarDatosFromServer() async {
-    int visitasDescargadas = 0;
-    int encuestasDescargadas = 0;
+  /// Descarga los clientes asignados desde el servidor y los guarda localmente
+  Future<Map<String, int>> descargarDatosFromServer({String? email, String? password}) async {
+    int clientesDescargados = 0;
     int errores = 0;
 
     try {
       final conectado = await ConnectivityService.instance.isConnected();
       if (!conectado) {
         print('📴 Sin conexión para descargar datos');
-        return {'visitas': 0, 'encuestas': 0, 'errores': 1};
+        return {'clientes': 0, 'errores': 1};
       }
 
-      print('📥 Descargando visitas desde el servidor...');
-      final visitas = await GenericRepository.instance.getListOnline<Map<String, dynamic>>(
-        path: '/salesperson/me/schedules',
+      // Autenticar online
+      final autenticado = await _authenticateOnline(email: email, password: password);
+      if (!autenticado) {
+        print('❌ No se pudo autenticar online');
+        return {'clientes': 0, 'errores': 1};
+      }
+
+      print('📥 Descargando clientes asignados desde el servidor...');
+      final clientes = await GenericRepository.instance.getListOnline<Map<String, dynamic>>(
+        path: '/salesperson/me/customers',
+        nestedKey: 'data',
         fromJson: (json) => json,
       );
 
-      if (visitas.isNotEmpty) {
-        await _db.guardarVisitas(visitas);
-        visitasDescargadas = visitas.length;
-        print('✅ $visitasDescargadas visitas guardadas localmente');
-
-        for (var visita in visitas) {
-          final visitaId = visita['id']?.toString();
-          if (visitaId != null) {
-            try {
-              print('📥 Descargando preguntas para visita $visitaId...');
-              final data = await GenericRepository.instance.getByIdOnline<Map<String, dynamic>>(
-                path: '/salesperson/me/schedules/$visitaId/with-questions',
-                fromJson: (json) => json,
-              );
-
-              if (data != null) {
-                final questions = data['questions'] ?? data['questions_json'] ?? data;
-                await _db.guardarEncuestaPreguntas(
-                  id: data['id']?.toString() ?? visitaId,
-                  visitId: visitaId,
-                  salespersonId: data['salesperson_id']?.toString(),
-                  customerId: data['customer_id']?.toString(),
-                  questionsJson: jsonEncode(questions),
-                );
-                encuestasDescargadas++;
-                print('✅ Preguntas guardadas para visita $visitaId');
-              }
-            } catch (e) {
-              errores++;
-              print('❌ Error descargando preguntas para visita $visitaId: $e');
-            }
-          }
-        }
+      if (clientes.isNotEmpty) {
+        await _db.guardarClientes(clientes);
+        clientesDescargados = clientes.length;
+        print('✅ $clientesDescargados clientes guardados localmente');
       }
     } catch (e) {
       errores++;
@@ -90,14 +158,13 @@ class SyncService {
     }
 
     return {
-      'visitas': visitasDescargadas,
-      'encuestas': encuestasDescargadas,
+      'clientes': clientesDescargados,
       'errores': errores,
     };
   }
 
-  /// Sube las respuestas pendientes al servidor y las marca como sincronizadas
-  Future<Map<String, int>> marcarTodoSincronizado() async {
+  /// Sube las visitas locales y respuestas al servidor
+  Future<Map<String, int>> marcarTodoSincronizado({String? email, String? password}) async {
     int marcadas = 0;
     int errores = 0;
 
@@ -108,56 +175,122 @@ class SyncService {
         return {'marcadas': 0, 'errores': 1};
       }
 
-      final pendientes = await _db.getRespuestasPendientes();
-      print('📦 Subiendo ${pendientes.length} respuestas pendientes...');
+      // Autenticar online
+      final autenticado = await _authenticateOnline(email: email, password: password);
+      if (!autenticado) {
+        print('❌ No se pudo autenticar online');
+        return {'marcadas': 0, 'errores': 1};
+      }
 
-      for (var respuesta in pendientes) {
+      final db = await _db.database;
+      
+      // Obtener visitas completadas localmente y que no estén sincronizadas
+      final completedVisits = await db.query(
+        'visitas',
+        where: "status = 'COMPLETED' AND sincronizado = 0",
+      );
+
+      print('📦 Sincronizando ${completedVisits.length} visitas completadas locales...');
+
+      for (var visitRow in completedVisits) {
+        final visitId = visitRow['id']?.toString() ?? '';
+        
         try {
-          if (respuesta['sincronizado'] == 0) {
-            final answersList = jsonDecode(respuesta['respuestas_json'] as String);
-            
-            final body = {
-              'visit_id': respuesta['visit_id'],
-              'latitude': respuesta['lat'],
-              'longitude': respuesta['lng'],
-              'photo_1': respuesta['foto1_path'], // base64 string
-              'photo_2': respuesta['foto2_path'], // base64 string
-              'answers': answersList,
+          // Obtener respuestas asociadas a la visita
+          final respuestas = await db.query(
+            'respuestas_pendientes',
+            where: 'visit_id = ? AND sincronizado = 0',
+            whereArgs: [visitId],
+          );
+
+          if (respuestas.isEmpty) {
+            // Si la visita está completada pero no hay respuestas, simplemente la marcamos como sincronizada
+            await _db.marcarVisitaSincronizada(visitId);
+            marcadas++;
+            continue;
+          }
+
+          final respuestaRow = respuestas.first;
+          final answersList = jsonDecode(respuestaRow['respuestas_json'] as String) as List;
+
+          // 1. Crear la visita en el backend
+          final visitBody = {
+            'customer_id': int.tryParse(visitRow['customer_id']?.toString() ?? '') ?? visitRow['customer_id'],
+            'notes': visitRow['notes'] ?? '',
+            'priority': visitRow['priority'] ?? 3,
+            'visit_date_from': visitRow['visit_date_from'],
+            'visit_date_to': visitRow['visit_date_to'],
+            'latitude': respuestaRow['lat'],
+            'longitude': respuestaRow['lng'],
+            'photo_1': respuestaRow['foto1_path'],
+            'photo_2': respuestaRow['foto2_path'],
+          };
+
+          print('📤 Creando visita en backend para cliente ${visitRow['customer_name']}...');
+          final visitResponse = await GenericRepository.instance.postOnline<Map<String, dynamic>>(
+            path: '/salesperson/me/visits',
+            body: visitBody,
+            fromJson: (json) => json,
+          );
+
+          if (visitResponse == null) {
+            throw Exception('El servidor rechazó la creación de la visita');
+          }
+
+          final backendVisitId = visitResponse['id'] ?? (visitResponse['data'] is Map ? visitResponse['data']['id'] : null);
+          if (backendVisitId == null) {
+            throw Exception('No se recibió un ID de visita válido desde el servidor: $visitResponse');
+          }
+
+          print('✅ Visita creada en backend con ID: $backendVisitId. Subiendo respuestas una a una...');
+
+          // 2. Subir respuestas individualmente
+          bool todasRespuestasSincronizadas = true;
+          for (var answerItem in answersList) {
+            final answerBody = {
+              'visit_id': int.tryParse(backendVisitId.toString()) ?? backendVisitId,
+              'question_id': int.tryParse(answerItem['question_id']?.toString() ?? '') ?? answerItem['question_id'],
+              if (answerItem.containsKey('answer_option')) 'answer_option': answerItem['answer_option'],
+              if (answerItem.containsKey('answer_text')) 'answer_text': answerItem['answer_text'],
             };
 
-            print('📤 Enviando respuesta para visita ${respuesta['visit_id']}...');
-            final response = await GenericRepository.instance.postOnline<Map<String, dynamic>>(
+            print('📤 Subiendo respuesta para pregunta ${answerItem['question_id']}...');
+            final answerResponse = await GenericRepository.instance.postOnline<Map<String, dynamic>>(
               path: '/salesperson/me/answers',
-              body: body,
+              body: answerBody,
               fromJson: (json) => json,
             );
 
-            if (response != null) {
-              await _db.marcarRespuestaSincronizada(respuesta['id'] as int);
-              await _db.actualizarEstadoVisita(
-                respuesta['visit_id'] as String,
-                'COMPLETED',
-              );
-              marcadas++;
-              print('✅ Respuesta #${respuesta['id']} subida y sincronizada');
-            } else {
-              errores++;
-              print('❌ API rechazó la respuesta #${respuesta['id']}');
+            if (answerResponse == null) {
+              todasRespuestasSincronizadas = false;
+              print('❌ Error al subir respuesta: $answerBody');
             }
+          }
+
+          if (todasRespuestasSincronizadas) {
+            // Marcar localmente como sincronizado
+            await _db.marcarRespuestaSincronizada(respuestaRow['id'] as int);
+            await _db.marcarVisitaSincronizada(visitId);
+            marcadas++;
+            print('✅ Sincronización exitosa para la visita $visitId');
+          } else {
+            errores++;
+            print('⚠️ Algunas respuestas no se pudieron sincronizar para la visita $visitId');
           }
         } catch (e) {
           errores++;
-          print('❌ Error subiendo #${respuesta['id']}: $e');
+          print('❌ Error sincronizando visita $visitId: $e');
         }
       }
 
-      // Limpiar sincronizadas
+      // Limpiar sincronizadas de SQLite
       if (marcadas > 0) {
         await _db.eliminarRespuestasSincronizadas();
         await _db.limpiarDatosAntiguos();
       }
 
-      print('📊 $marcadas subidas con éxito, $errores errores');
+      // Limpiar token
+      AuthService.instance.onlineToken = null;
     } catch (e) {
       print('❌ Error en marcarTodoSincronizado: $e');
       errores++;

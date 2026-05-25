@@ -19,7 +19,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: (db, version) async {
         await _createTables(db);
       },
@@ -33,6 +33,30 @@ class DatabaseHelper {
           await db.execute('DROP TABLE IF EXISTS encuestas_visita');
           await db.execute('DROP TABLE IF EXISTS respuestas_pendientes');
           await _createTables(db);
+        }
+        if (oldVersion < 4) {
+          try {
+            await db.execute('ALTER TABLE clientes ADD COLUMN activo INTEGER DEFAULT 1');
+          } catch (e) {
+            print('Column activo already exists in clientes: $e');
+          }
+          try {
+            await db.execute('ALTER TABLE clientes ADD COLUMN tipo TEXT');
+          } catch (e) {
+            print('Column tipo already exists in clientes: $e');
+          }
+        }
+        // En onUpgrade para versión 5:
+        if (oldVersion < 5) {
+          try {
+            await db.execute('ALTER TABLE clientes ADD COLUMN lat REAL');
+          } catch (e) {}
+          try {
+            await db.execute('ALTER TABLE clientes ADD COLUMN lng REAL');
+          } catch (e) {}
+          try {
+            await db.execute('ALTER TABLE clientes ADD COLUMN coordenadas_actualizadas INTEGER DEFAULT 0');
+          } catch (e) {}
         }
       },
     );
@@ -88,6 +112,8 @@ class DatabaseHelper {
         telefono TEXT,
         email TEXT,
         direccion TEXT,
+        activo INTEGER DEFAULT 1,
+        tipo TEXT,
         sincronizado INTEGER DEFAULT 0,
         fecha_sync TEXT
       )
@@ -152,11 +178,25 @@ class DatabaseHelper {
     final db = await database;
     final batch = db.batch();
     for (var cliente in clientes) {
+      final activeVal = cliente['active'] == true ||
+              cliente['active']?.toString() == 'true' ||
+              cliente['activo'] == true ||
+              cliente['activo']?.toString() == 'true' ||
+              cliente['active'] == 1 ||
+              cliente['activo'] == 1
+          ? 1
+          : 0;
+
       batch.insert('clientes', {
-        'id': cliente['id'],
-        'name': cliente['name'],
-        'code_client_profit': cliente['code_client_profit'],
-        'tax_id': cliente['tax_id'],
+        'id': cliente['id']?.toString(),
+        'name': cliente['name'] ?? 'Sin nombre',
+        'code_client_profit': cliente['code_client_profit'] ?? '',
+        'tax_id': cliente['tax_id'] ?? '',
+        'telefono': cliente['phone']?.toString() ?? cliente['telefono']?.toString() ?? '',
+        'email': cliente['email']?.toString() ?? '',
+        'direccion': cliente['address']?.toString() ?? cliente['direccion']?.toString() ?? '',
+        'activo': activeVal,
+        'tipo': cliente['type']?.toString() ?? cliente['tipo']?.toString() ?? '',
         'sincronizado': 1,
         'fecha_sync': DateTime.now().toIso8601String(),
       }, conflictAlgorithm: ConflictAlgorithm.replace);
@@ -251,6 +291,19 @@ class DatabaseHelper {
     await db.update(
       'visitas',
       {'status': status, 'completed_at': DateTime.now().toIso8601String()},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> marcarVisitaSincronizada(String id) async {
+    final db = await database;
+    await db.update(
+      'visitas',
+      {
+        'sincronizado': 1,
+        'fecha_sync': DateTime.now().toIso8601String(),
+      },
       where: 'id = ?',
       whereArgs: [id],
     );
@@ -413,7 +466,7 @@ class DatabaseHelper {
       await db.insert('usuarios', {
         'id': 'admin-001',
         'username': 'admin',
-        'password': 'admin123',
+        'password': '123456',
         'full_name': 'Administrador',
         'role': 'admin',
         'activo': 1,
@@ -426,7 +479,7 @@ class DatabaseHelper {
     if (vendedorExistente.isEmpty) {
       await db.insert('usuarios', {
         'id': 'vendedor-001',
-        'username': 'vendedor@solsumed',
+        'username': 'vendedor@solsumed.com',
         'password': '123456',
         'full_name': 'Vendedor Principal',
         'role': 'vendedor',
@@ -436,62 +489,7 @@ class DatabaseHelper {
       print('✅ Usuario vendedor creado');
     }
 
-    // Sembrar visitas de prueba si no existen
-    final visitasExistentes = await db.query('visitas');
-    if (visitasExistentes.isEmpty) {
-      final now = DateTime.now();
-      final yearStr = now.year.toString();
-      final monthStr = now.month.toString().padLeft(2, '0');
-
-      await db.insert('visitas', {
-        'id': 'visita-001',
-        'customer_id': 'cli-001',
-        'customer_name': 'Farmacia Central, C.A.',
-        'address': 'Av. Bolívar con Calle 10, Edif. Central',
-        'city': 'Caracas',
-        'code_client_profit': 'CLI-001',
-        'tax_id': 'J-12345678-9',
-        'visit_date_from': '$yearStr-$monthStr-01',
-        'visit_date_to': '$yearStr-$monthStr-28',
-        'notes': 'Revisar inventario de medicamentos de alta rotación.',
-        'priority': 1,
-        'status': 'PENDING',
-        'sincronizado': 0,
-      });
-
-      await db.insert('visitas', {
-        'id': 'visita-002',
-        'customer_id': 'cli-002',
-        'customer_name': 'Droguería El Camino',
-        'address': 'Zona Industrial Cloris, Galpón 4',
-        'city': 'Guarenas',
-        'code_client_profit': 'CLI-002',
-        'tax_id': 'J-98765432-1',
-        'visit_date_from': '$yearStr-$monthStr-02',
-        'visit_date_to': '$yearStr-$monthStr-28',
-        'notes': 'Presentar catálogo de nuevos productos médicos.',
-        'priority': 2,
-        'status': 'PENDING',
-        'sincronizado': 0,
-      });
-
-      await db.insert('visitas', {
-        'id': 'visita-003',
-        'customer_id': 'cli-003',
-        'customer_name': 'Clínica San Gabriel',
-        'address': 'Urb. Las Mercedes, Av. Principal',
-        'city': 'Caracas',
-        'code_client_profit': 'CLI-003',
-        'tax_id': 'J-45678901-2',
-        'visit_date_from': '$yearStr-$monthStr-03',
-        'visit_date_to': '$yearStr-$monthStr-28',
-        'notes': 'Cobro de facturas pendientes.',
-        'priority': 3,
-        'status': 'PENDING',
-        'sincronizado': 0,
-      });
-      print('✅ Visitas de prueba sembradas');
-    }
+  
   }
 
   /// Verifica credenciales de login

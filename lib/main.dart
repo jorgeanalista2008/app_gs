@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'services/database_helper.dart';
-import 'services/sync_service.dart';
 import 'pages/login_page.dart';
 import 'core/app_colors.dart';
 
@@ -10,9 +9,6 @@ void main() async {
   // Inicializar BD y crear usuario maestro
   final db = DatabaseHelper.instance;
   await db.insertarUsuarioMaestro();
-
-  // Iniciar SyncService local
-  SyncService.iniciar();
 
   runApp(const MyApp());
 }

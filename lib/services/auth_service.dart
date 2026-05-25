@@ -12,6 +12,10 @@ class AuthService {
   static const String _isLoggedInKey = 'is_logged_in';
 
   Map<String, dynamic>? _currentUser;
+  String? _onlineToken;
+
+  String? get onlineToken => _onlineToken;
+  set onlineToken(String? token) => _onlineToken = token;
 
   Map<String, dynamic>? get currentUser => _currentUser;
   bool get isLoggedIn => _currentUser != null;
@@ -70,7 +74,12 @@ class AuthService {
     }));
   }
 
-  Future<String?> getToken() async => _currentUser?['id']?.toString();
+  Future<void> updateLocalSession(Map<String, dynamic> user) async {
+    _currentUser = user;
+    await _saveSession(user);
+  }
+
+  Future<String?> getToken() async => _onlineToken ?? _currentUser?['id']?.toString();
 
   Future<Map<String, dynamic>?> getUserData() async {
     if (_currentUser == null) return null;

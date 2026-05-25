@@ -6,6 +6,8 @@ import '../pages/clientes_page.dart';
 import '../pages/catalogo_page.dart';
 import '../pages/visitas_page.dart';
 import '../pages/admin_panel_page.dart';
+import '../pages/mapa_clientes_page.dart';
+
 class AppDrawer extends StatelessWidget {
   final String userName;
   final String? userRole;
@@ -24,10 +26,8 @@ class AppDrawer extends StatelessWidget {
     this.onProfileUpdated,
   });
 
-  // Mapeo de roles por nombre
   String _getRoleName(String? role) {
     switch (role?.toLowerCase()) {
-      case 'superadmin':
       case 'admin':
         return 'Administrador';
       case 'vendedor':
@@ -36,23 +36,18 @@ class AppDrawer extends StatelessWidget {
     }
   }
 
-  // Helpers como MÉTODOS que reciben el rol
-  bool _isAdmin(String? role) => role?.toLowerCase() == 'superadmin' || role?.toLowerCase() == 'admin';
+  bool _isAdmin(String? role) => role?.toLowerCase() == 'admin';
   bool _isVendedor(String? role) => role?.toLowerCase() == 'vendedor';
 
   @override
   Widget build(BuildContext context) {
-    // Guardar en variables locales para usar en el build
     final rol = userRole;
-    print('=== APP DRAWER ===');
-    print('userRole: $userRole');
-    print('isAdmin: ${_isAdmin(userRole)}');
-    print('isVendedor: ${_isVendedor(userRole)}');
+
     return Drawer(
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          // Header con datos del usuario
+          // Header
           UserAccountsDrawerHeader(
             accountName: Text(
               userName,
@@ -66,41 +61,14 @@ class AppDrawer extends StatelessWidget {
             decoration: const BoxDecoration(color: AppColors.primaryColor),
           ),
 
-          // Dashboard (Home) - Para todos
+          // Dashboard - Ambos roles
           ListTile(
             leading: const Icon(Icons.dashboard, color: AppColors.primaryColor),
             title: const Text('Dashboard'),
             onTap: () => Navigator.pop(context),
           ),
 
-          // Mi Perfil - Para todos
-          ListTile(
-            leading: const Icon(Icons.person_outline, color: AppColors.primaryColor),
-            title: const Text('Mi Perfil'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ProfilePage()),
-              ).then((_) => onProfileUpdated?.call());
-            },
-          ),
-
-          // Clientes - Admin, Vendedor
-          if (_isAdmin(rol) || _isVendedor(rol))
-            ListTile(
-              leading: const Icon(Icons.people, color: AppColors.primaryColor),
-              title: const Text('Clientes'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ClientesPage()),
-                );
-              },
-            ),
-
-          // Panel de Administración - Solo Admin/Superadmin
+          // ─── ADMIN ───
           if (_isAdmin(rol))
             ListTile(
               leading: const Icon(Icons.admin_panel_settings, color: Colors.teal),
@@ -115,30 +83,30 @@ class AppDrawer extends StatelessWidget {
               },
             ),
 
-            // Catálogo de Productos - Admin, Vendedor
-            if (_isAdmin(rol) || _isVendedor(rol))
-              ListTile(
-                leading: const Icon(Icons.inventory_2, color: AppColors.primaryColor),
-                title: const Text('Catálogo de Productos'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const CatalogoPage()),
-                  );
-                },
-              ),
-
-          // Mis Pedidos - Vendedor
-          if (_isVendedor(rol))
+          // ─── VENDEDOR ───
+          if (_isVendedor(rol)) ...[
             ListTile(
-              leading: const Icon(Icons.shopping_cart, color: AppColors.primaryColor),
-              title: const Text('Mis Pedidos'),
-              onTap: () => Navigator.pop(context),
+              leading: const Icon(Icons.people, color: AppColors.primaryColor),
+              title: const Text('Clientes'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ClientesPage()),
+                );
+              },
             ),
-
-                      // Visitas - Vendedor
-          if (_isVendedor(rol))
+            ListTile(
+              leading: const Icon(Icons.inventory_2, color: AppColors.primaryColor),
+              title: const Text('Catálogo de Productos'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const CatalogoPage()),
+                );
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.assignment, color: AppColors.primaryColor),
               title: const Text('Mis Visitas'),
@@ -149,17 +117,39 @@ class AppDrawer extends StatelessWidget {
                   MaterialPageRoute(builder: (context) => const VisitasPage()),
                 );
               },
+            ),  
+            // En la sección del vendedor:
+            ListTile(
+              leading: const Icon(Icons.map, color: Colors.teal),
+              title: const Text('Mapa de Clientes'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const MapaClientesPage()),
+                );
+              },
             ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.person_outline, color: AppColors.primaryColor),
+              title: const Text('Mi Perfil'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ProfilePage()),
+                ).then((_) => onProfileUpdated?.call());
+              },
+            ),
+          ],
 
           const Divider(),
 
-          // Cerrar Sesión
+          // Cerrar Sesión - Ambos
           ListTile(
             leading: const Icon(Icons.logout, color: AppColors.errorColor),
-            title: const Text(
-              'Cerrar Sesión',
-              style: TextStyle(color: AppColors.errorColor),
-            ),
+            title: const Text('Cerrar Sesión', style: TextStyle(color: AppColors.errorColor)),
             onTap: onLogout,
           ),
         ],
