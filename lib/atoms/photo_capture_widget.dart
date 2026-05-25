@@ -1,11 +1,13 @@
 import 'dart:io';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../core/app_colors.dart';
 
 class PhotoCaptureWidget extends StatefulWidget {
   final String label;
-  final Function(File? file)? onPhotoTaken;
+  final Function(File? file, String? base64String)? onPhotoTaken;
   final File? initialPhoto;
 
   const PhotoCaptureWidget({
@@ -39,9 +41,11 @@ class _PhotoCaptureWidgetState extends State<PhotoCaptureWidget> {
       );
 
       if (image != null) {
+        final bytes = await image.readAsBytes();
+        final base64String = base64Encode(bytes);
         final file = File(image.path);
         setState(() => _photo = file);
-        widget.onPhotoTaken?.call(file);
+        widget.onPhotoTaken?.call(file, base64String);
       }
     } catch (e) {
       print('❌ Error al tomar foto: $e');
@@ -66,9 +70,11 @@ class _PhotoCaptureWidgetState extends State<PhotoCaptureWidget> {
       );
 
       if (image != null) {
+        final bytes = await image.readAsBytes();
+        final base64String = base64Encode(bytes);
         final file = File(image.path);
         setState(() => _photo = file);
-        widget.onPhotoTaken?.call(file);
+        widget.onPhotoTaken?.call(file, base64String);
       }
     } catch (e) {
       print('❌ Error al seleccionar foto: $e');
@@ -77,7 +83,7 @@ class _PhotoCaptureWidgetState extends State<PhotoCaptureWidget> {
 
   void _eliminarFoto() {
     setState(() => _photo = null);
-    widget.onPhotoTaken?.call(null);
+    widget.onPhotoTaken?.call(null, null);
   }
 
   @override
@@ -106,10 +112,15 @@ class _PhotoCaptureWidgetState extends State<PhotoCaptureWidget> {
                         children: [
                           // Imagen de fondo
                           Positioned.fill(
-                            child: Image.file(
-                              _photo!,
-                              fit: BoxFit.cover,
-                            ),
+                            child: kIsWeb
+                                ? Image.network(
+                                    _photo!.path,
+                                    fit: BoxFit.cover,
+                                  )
+                                : Image.file(
+                                    _photo!,
+                                    fit: BoxFit.cover,
+                                  ),
                           ),
                           // Botón eliminar
                           Positioned(

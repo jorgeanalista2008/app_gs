@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../models/cliente_model.dart';
 import '../repositories/cliente_repository.dart';
+import '../services/auth_service.dart';
 import '../atoms/app_button.dart';
 import '../atoms/app_text_field.dart';
-import '../atoms/status_badge.dart';
 
 class ClientesPage extends StatefulWidget {
   const ClientesPage({super.key});
@@ -15,6 +15,7 @@ class ClientesPage extends StatefulWidget {
 
 class _ClientesPageState extends State<ClientesPage> {
   final ClienteRepository _clienteRepo = ClienteRepository();
+  final AuthService _authService = AuthService.instance;
   final TextEditingController _searchController = TextEditingController();
 
   List<ClienteModel> _clientes = [];
@@ -35,7 +36,7 @@ class _ClientesPageState extends State<ClientesPage> {
     });
 
     try {
-      final clientes = await _clienteRepo.getMisClientes(); // <-- CORREGIDO
+      final clientes = await _clienteRepo.getClientesLocales();
       if (mounted) {
         setState(() {
           _clientes = clientes;
@@ -49,6 +50,45 @@ class _ClientesPageState extends State<ClientesPage> {
           _error = 'Error al cargar clientes: $e';
           _isLoading = false;
         });
+      }
+    }
+  }
+
+  Future<void> _syncClientes() async {
+    final usuario = _authService.currentUser;
+    if (usuario == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay sesión activa'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final guardados = await _clienteRepo.sincronizarClientes(
+        email: usuario['username'] ?? '',
+        password: usuario['password'] ?? '',
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(guardados > 0
+                ? '✅ $guardados clientes nuevos sincronizados'
+                : '✅ Ya tienes todos los clientes actualizados'),
+            backgroundColor: guardados > 0 ? Colors.green : Colors.blue,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        _loadClientes();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al sincronizar: $e'), backgroundColor: Colors.red),
+        );
       }
     }
   }
@@ -81,6 +121,13 @@ class _ClientesPageState extends State<ClientesPage> {
         title: const Text('Mis Clientes'),
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.cloud_download),
+            tooltip: 'Sincronizar clientes',
+            onPressed: _isLoading ? null : _syncClientes,
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -91,7 +138,7 @@ class _ClientesPageState extends State<ClientesPage> {
             child: AppTextField(
               controller: _searchController,
               labelText: 'Buscar cliente',
-              hintText: 'Nombre, RIF, o código ...',
+              hintText: 'Nombre, RIF, código o teléfono...',
               icon: Icons.search,
               onSubmitted: _filtrarClientes,
             ),
@@ -113,23 +160,17 @@ class _ClientesPageState extends State<ClientesPage> {
             ),
 
           // Contenido principal
-          Expanded(
-            child: _buildContent(),
-          ),
+          Expanded(child: _buildContent()),
         ],
       ),
     );
   }
 
   Widget _buildContent() {
-    // Loading
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primaryColor),
-      );
+      return const Center(child: CircularProgressIndicator(color: AppColors.primaryColor));
     }
 
-    // Error
     if (_error != null) {
       return Center(
         child: Column(
@@ -139,23 +180,15 @@ class _ClientesPageState extends State<ClientesPage> {
             const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Text(
-                _error!,
-                style: TextStyle(color: Colors.grey[600]),
-                textAlign: TextAlign.center,
-              ),
+              child: Text(_error!, style: TextStyle(color: Colors.grey[600]), textAlign: TextAlign.center),
             ),
             const SizedBox(height: 16),
-            AppButton(
-              text: 'Reintentar',
-              onPressed: _loadClientes,
-            ),
+            AppButton(text: 'Reintentar', onPressed: _loadClientes),
           ],
         ),
       );
     }
 
-    // Lista vacía
     if (_clientesFiltrados.isEmpty) {
       return Center(
         child: Column(
@@ -165,16 +198,25 @@ class _ClientesPageState extends State<ClientesPage> {
             const SizedBox(height: 16),
             Text(
               _searchController.text.isEmpty
-                  ? 'No tienes clientes asignados'
+                  ? 'No tienes clientes. Presiona ☁️ para sincronizar.'
                   : 'No se encontraron clientes',
               style: TextStyle(fontSize: 16, color: Colors.grey[500]),
+              textAlign: TextAlign.center,
             ),
+            if (_searchController.text.isEmpty) ...[
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: _syncClientes,
+                icon: const Icon(Icons.cloud_download),
+                label: const Text('Sincronizar Clientes'),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryColor, foregroundColor: Colors.white),
+              ),
+            ],
           ],
         ),
       );
     }
 
-    // Lista de clientes
     return RefreshIndicator(
       onRefresh: _loadClientes,
       color: AppColors.primaryColor,
@@ -206,14 +248,8 @@ class _ClientesPageState extends State<ClientesPage> {
                 radius: 28,
                 backgroundColor: AppColors.primaryColor.withOpacity(0.1),
                 child: Text(
-                  cliente.name.isNotEmpty
-                      ? cliente.name[0].toUpperCase()
-                      : '?',
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primaryColor,
-                  ),
+                  cliente.name.isNotEmpty ? cliente.name[0].toUpperCase() : '?',
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.primaryColor),
                 ),
               ),
               const SizedBox(width: 16),
@@ -225,37 +261,32 @@ class _ClientesPageState extends State<ClientesPage> {
                   children: [
                     Text(
                       cliente.name,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
                     if (cliente.codeClientProfit.isNotEmpty)
-                      Text(
-                        'Cód: ${cliente.codeClientProfit}',
-                        style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                      ),
+                      Text('Cód: ${cliente.codeClientProfit}', style: TextStyle(fontSize: 13, color: Colors.grey[600])),
                     if (cliente.taxId.isNotEmpty)
-                      Text(
-                        'RIF: ${cliente.taxId}',
-                        style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                      ),
+                      Text('RIF: ${cliente.taxId}', style: TextStyle(fontSize: 13, color: Colors.grey[600])),
                   ],
                 ),
               ),
 
               // Badge de activo
-              StatusBadge(
-                status: cliente.activo ? 'activo' : 'inactivo',
-                small: true,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: cliente.activo ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  cliente.activo ? 'Activo' : 'Inactivo',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cliente.activo ? Colors.green : Colors.red),
+                ),
               ),
               const SizedBox(width: 8),
-
-              // Icono de navegación
               Icon(Icons.chevron_right, color: Colors.grey[400]),
             ],
           ),
@@ -267,9 +298,7 @@ class _ClientesPageState extends State<ClientesPage> {
   void _mostrarDetalleCliente(ClienteModel cliente) {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
         return Container(
           padding: const EdgeInsets.all(24),
@@ -277,34 +306,21 @@ class _ClientesPageState extends State<ClientesPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Indicador de arrastre
               Center(
                 child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
                 ),
               ),
               const SizedBox(height: 16),
-
-              // Cabecera
               Row(
                 children: [
                   CircleAvatar(
                     radius: 30,
                     backgroundColor: AppColors.primaryColor.withOpacity(0.1),
                     child: Text(
-                      cliente.name.isNotEmpty
-                          ? cliente.name[0].toUpperCase()
-                          : '?',
-                      style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primaryColor,
-                      ),
+                      cliente.name.isNotEmpty ? cliente.name[0].toUpperCase() : '?',
+                      style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.primaryColor),
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -312,18 +328,9 @@ class _ClientesPageState extends State<ClientesPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          cliente.name,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                        Text(cliente.name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                         if (cliente.codeClientProfit.isNotEmpty)
-                          Text(
-                            'Código: ${cliente.codeClientProfit}',
-                            style: TextStyle(color: Colors.grey[600]),
-                          ),
+                          Text('Código: ${cliente.codeClientProfit}', style: TextStyle(color: Colors.grey[600])),
                       ],
                     ),
                   ),
@@ -332,24 +339,12 @@ class _ClientesPageState extends State<ClientesPage> {
               const SizedBox(height: 24),
               const Divider(),
               const SizedBox(height: 16),
-
-              // Detalles
-              if (cliente.taxId.isNotEmpty)
-                _buildDetailRow(Icons.badge, 'RIF', cliente.taxId),
-              if (cliente.telefono.isNotEmpty)
-                _buildDetailRow(Icons.phone, 'Teléfono', cliente.telefono),
-              if (cliente.email.isNotEmpty)
-                _buildDetailRow(Icons.email, 'Email', cliente.email),
-              if (cliente.direccion.isNotEmpty)
-                _buildDetailRow(Icons.location_on, 'Dirección', cliente.direccion),
-              if (cliente.tipo.isNotEmpty)
-                _buildDetailRow(Icons.category, 'Tipo', cliente.tipo),
-              _buildDetailRow(
-                Icons.check_circle,
-                'Estado',
-                cliente.activo ? 'Activo' : 'Inactivo',
-              ),
-
+              if (cliente.taxId.isNotEmpty) _buildDetailRow(Icons.badge, 'RIF', cliente.taxId),
+              if (cliente.telefono.isNotEmpty) _buildDetailRow(Icons.phone, 'Teléfono', cliente.telefono),
+              if (cliente.email.isNotEmpty) _buildDetailRow(Icons.email, 'Email', cliente.email),
+              if (cliente.direccion.isNotEmpty) _buildDetailRow(Icons.location_on, 'Dirección', cliente.direccion),
+              if (cliente.tipo.isNotEmpty) _buildDetailRow(Icons.category, 'Tipo', cliente.tipo),
+              _buildDetailRow(Icons.check_circle, 'Estado', cliente.activo ? 'Activo' : 'Inactivo'),
               const SizedBox(height: 16),
             ],
           ),
@@ -360,7 +355,6 @@ class _ClientesPageState extends State<ClientesPage> {
 
   Widget _buildDetailRow(IconData icon, String label, String value) {
     if (value.isEmpty) return const SizedBox.shrink();
-
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
@@ -368,9 +362,7 @@ class _ClientesPageState extends State<ClientesPage> {
           Icon(icon, size: 20, color: AppColors.primaryColor),
           const SizedBox(width: 12),
           Text('$label: ', style: const TextStyle(fontWeight: FontWeight.w600)),
-          Expanded(
-            child: Text(value, style: TextStyle(color: Colors.grey[700])),
-          ),
+          Expanded(child: Text(value, style: TextStyle(color: Colors.grey[700]))),
         ],
       ),
     );

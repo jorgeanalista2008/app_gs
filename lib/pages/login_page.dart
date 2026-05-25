@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../atoms/app_button.dart';
 import '../atoms/app_text_field.dart';
-import 'home_page.dart';
 import '../services/auth_service.dart';
+import 'home_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -15,8 +15,25 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final TextEditingController _userController = TextEditingController();
   final TextEditingController _passController = TextEditingController();
-  final AuthService _authService = AuthService();
+  final AuthService _authService = AuthService.instance;
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _tryAutoLogin();
+  }
+
+  /// Intenta restaurar sesión guardada
+  Future<void> _tryAutoLogin() async {
+    final loggedIn = await _authService.tryAutoLogin();
+    if (loggedIn && mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const HomePage()),
+      );
+    }
+  }
 
   void _login() async {
     String usuario = _userController.text.trim();
@@ -34,44 +51,42 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
 
     try {
-      final loginResponse = await _authService.login(usuario, password);
-      
+      final exito = await _authService.login(usuario, password);
+
       setState(() => _isLoading = false);
 
-      // Debug
-      print('=== LOGIN EXITOSO ===');
-      print('Token: ${loginResponse.accessToken}');
-      print('Usuario: ${loginResponse.user.fullName}');
-      print('Rol: ${loginResponse.user.role.name}');
-      print('Menús: ${loginResponse.user.menus.length}');
-      print('=====================');
+      if (exito) {
+        print('=== LOGIN EXITOSO ===');
+        print('Usuario: ${_authService.userName}');
+        print('Rol: ${_authService.userRole}');
+        print('=====================');
 
-      // Navegar sin verificar status
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const HomePage()),
-        );
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const HomePage()),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Usuario o contraseña incorrectos.'),
+              backgroundColor: AppColors.errorColor,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      String mensaje = e.toString().replaceFirst('Exception: ', '');
-      
-      if (mensaje.contains('invalid credentials') || mensaje.contains('incorrectos')) {
-        mensaje = 'Usuario o contraseña incorrectos.';
-      } else if (mensaje.contains('desactivado') || mensaje.contains('disabled')) {
-        mensaje = 'Su cuenta está desactivada.';
-      } else if (mensaje.contains('SocketException') || mensaje.contains('timeout')) {
-        mensaje = 'Error de conexión. Verifique su internet.';
-      }
-      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(mensaje),
+            content: Text('Error: $e'),
             backgroundColor: AppColors.errorColor,
             behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 4),
           ),
         );
       }
@@ -88,7 +103,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.backgroundColor,
+      backgroundColor: Colors.grey[50],
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -114,7 +129,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
               const SizedBox(height: 20),
-              
+
               // Nombre de la empresa
               const Text(
                 'Grupo Solsumed, CA',
@@ -125,17 +140,17 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
               const SizedBox(height: 10),
-              
+
               // Subtítulo
               Text(
                 'Iniciar Sesión',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
-                  color: AppColors.textSecondary,
+                  color: Colors.grey[600],
                 ),
               ),
               const SizedBox(height: 40),
-              
+
               // Card del formulario
               Container(
                 padding: const EdgeInsets.all(30),
@@ -156,13 +171,13 @@ class _LoginPageState extends State<LoginPage> {
                     AppTextField(
                       controller: _userController,
                       labelText: 'Usuario',
-                      hintText: 'Ingresa tu usuario o email',
+                      hintText: 'Ingresa tu usuario',
                       icon: Icons.person_outline,
-                      keyboardType: TextInputType.emailAddress,
+                      keyboardType: TextInputType.text,
                       onSubmitted: (_) => _login(),
                     ),
                     const SizedBox(height: 20),
-                    
+
                     // Campo de contraseña
                     AppTextField(
                       controller: _passController,
@@ -173,7 +188,7 @@ class _LoginPageState extends State<LoginPage> {
                       onSubmitted: (_) => _login(),
                     ),
                     const SizedBox(height: 30),
-                    
+
                     // Botón de login
                     SizedBox(
                       width: double.infinity,
@@ -186,15 +201,15 @@ class _LoginPageState extends State<LoginPage> {
                   ],
                 ),
               ),
-              
+
               const SizedBox(height: 20),
-              
+
               // Footer
               Text(
                 '© ${DateTime.now().year} Grupo Solsumed, CA',
                 style: TextStyle(
                   fontSize: 12,
-                  color: AppColors.textSecondary.withOpacity(0.6),
+                  color: Colors.grey[400],
                 ),
               ),
             ],

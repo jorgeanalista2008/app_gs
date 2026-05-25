@@ -3,12 +3,11 @@ class ClienteModel {
   final String name;
   final String codeClientProfit;
   final String taxId;
-  // Campos adicionales para el detalle
   final String telefono;
   final String email;
   final String direccion;
-  final String tipo;
   final bool activo;
+  final String tipo;
 
   ClienteModel({
     required this.id,
@@ -18,8 +17,8 @@ class ClienteModel {
     this.telefono = '',
     this.email = '',
     this.direccion = '',
-    this.tipo = '',
     this.activo = true,
+    this.tipo = '',
   });
 
   factory ClienteModel.fromJson(Map<String, dynamic> json) {
@@ -31,8 +30,8 @@ class ClienteModel {
       telefono: json['phone']?.toString() ?? json['telefono']?.toString() ?? '',
       email: json['email']?.toString() ?? '',
       direccion: json['address']?.toString() ?? json['direccion']?.toString() ?? '',
+      activo: json['active'] == true || json['active']?.toString() == 'true' || json['activo'] == 1,
       tipo: json['type']?.toString() ?? json['tipo']?.toString() ?? '',
-      activo: json['active']?.toString() == 'true' || json['active'] == true || json['activo'] == true,
     );
   }
 
@@ -44,10 +43,7 @@ class ClienteModel {
     'phone': telefono,
     'email': email,
     'address': direccion,
-    'type': tipo,
     'active': activo,
+    'type': tipo,
   };
-
-  @override
-  String toString() => 'ClienteModel(id: $id, name: $name, rif: $taxId)';
 }

@@ -31,7 +31,7 @@ class AppTheme {
         ),
 
         // Tema de Tarjetas (Cards)
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           elevation: 0,
           color: AppColors.cardColor,
           margin: EdgeInsets.zero,
@@ -74,7 +74,7 @@ class AppTheme {
         ),
 
         // Tema de Diálogos (Dialog)
-        dialogTheme: DialogTheme(
+        dialogTheme: DialogThemeData(
           backgroundColor: AppColors.cardColor,
           elevation: 10,
           shadowColor: Colors.black.withOpacity(0.1),
