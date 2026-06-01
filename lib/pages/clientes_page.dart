@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import '../atoms/app_button.dart';
 import '../atoms/app_text_field.dart';
 import 'nuevo_prospecto_page.dart';
+import '../services/sync_queue_service.dart';
 
 class ClientesPage extends StatefulWidget {
   const ClientesPage({super.key});
@@ -104,6 +105,9 @@ class _ClientesPageState extends State<ClientesPage>
     setState(() => _isLoading = true);
 
     try {
+      // Primero subir prospectos u otras operaciones locales pendientes
+      await SyncQueueService.instance.drain();
+
       final guardados = await _clienteRepo.sincronizarClientes(
         email: usuario['username'] ?? '',
         password: usuario['password'] ?? '',

@@ -12,6 +12,14 @@ class ClienteModel {
   final String? serverId;
   final String notes;
   final bool sincronizado;
+  
+  // Nuevos campos para prospectos
+  final String? contactName;
+  final String? city;
+  final String? zoneCode;
+  final String? nextFollowupDate;
+  final String? photo1;
+  final String? photo2;
 
   ClienteModel({
     required this.id,
@@ -27,6 +35,12 @@ class ClienteModel {
     this.serverId,
     this.notes = '',
     this.sincronizado = true,
+    this.contactName,
+    this.city,
+    this.zoneCode,
+    this.nextFollowupDate,
+    this.photo1,
+    this.photo2,
   });
 
   factory ClienteModel.fromJson(Map<String, dynamic> json) {
@@ -46,6 +60,12 @@ class ClienteModel {
       serverId: json['server_id']?.toString(),
       notes: json['notes']?.toString() ?? '',
       sincronizado: (json['sincronizado'] ?? 1) == 1,
+      contactName: json['contact_name']?.toString(),
+      city: json['city']?.toString(),
+      zoneCode: json['zone_code']?.toString(),
+      nextFollowupDate: json['next_followup_date']?.toString(),
+      photo1: json['photo_1']?.toString(),
+      photo2: json['photo_2']?.toString(),
     );
   }
 
@@ -62,5 +82,11 @@ class ClienteModel {
         'is_prospect': isProspect ? 1 : 0,
         'server_id': serverId,
         'notes': notes,
+        'contact_name': contactName,
+        'city': city,
+        'zone_code': zoneCode,
+        'next_followup_date': nextFollowupDate,
+        'photo_1': photo1,
+        'photo_2': photo2,
       };
 }

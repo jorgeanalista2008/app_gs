@@ -103,6 +103,12 @@ class ClienteRepository {
     String notes = '',
     double? lat,
     double? lng,
+    String? contactName,
+    String? city,
+    String? zoneCode,
+    String? nextFollowupDate,
+    String? photo1,
+    String? photo2,
   }) async {
     final localId = _uuid.v4();
     final nowIso = DateTime.now().toUtc().toIso8601String();
@@ -125,20 +131,47 @@ class ClienteRepository {
       'lng': lng,
       'updated_at': nowIso,
       'fecha_sync': null,
+      'contact_name': contactName,
+      'city': city,
+      'zone_code': zoneCode,
+      'next_followup_date': nextFollowupDate,
+      'photo_1': photo1,
+      'photo_2': photo2,
     };
     await db.insert('clientes', row,
         conflictAlgorithm: ConflictAlgorithm.replace);
 
-    // Payload para POST /customer (campos que acepta el backend).
+    final salespersonId = await GenericRepository.instance.getUserId();
+    String? salespersonEmail;
+    String? salespersonPassword;
+    if (salespersonId != null) {
+      final userLocal = await _db.getUsuario(salespersonId);
+      if (userLocal != null) {
+        salespersonEmail = userLocal['username'];
+        salespersonPassword = userLocal['password'];
+      }
+    }
+
+    // Payload para POST /salesperson/auth/prospects (CredsCreateProspectDto).
     final payload = <String, dynamic>{
       'name': name,
       if (taxId.isNotEmpty) 'tax_id': taxId,
       if (telefono.isNotEmpty) 'phone': telefono,
-      if (email.isNotEmpty) 'email': email,
+      if (email.isNotEmpty) 'contact_email': email,
       if (direccion.isNotEmpty) 'address': direccion,
       if (notes.isNotEmpty) 'notes': notes,
       if (lat != null) 'latitude': lat,
       if (lng != null) 'longitude': lng,
+      if (salespersonId != null) 'salesperson_id': salespersonId,
+      'source': 'OTRO',
+      if (salespersonEmail != null) 'email': salespersonEmail,
+      if (salespersonPassword != null) 'password': salespersonPassword,
+      if (contactName != null && contactName.isNotEmpty) 'contact_name': contactName,
+      if (city != null && city.isNotEmpty) 'city': city,
+      if (zoneCode != null && zoneCode.isNotEmpty) 'zone_code': zoneCode,
+      if (nextFollowupDate != null && nextFollowupDate.isNotEmpty) 'next_followup_date': nextFollowupDate,
+      if (photo1 != null && photo1.isNotEmpty) 'photo_1': photo1,
+      if (photo2 != null && photo2.isNotEmpty) 'photo_2': photo2,
     };
 
     await SyncQueueService.instance.enqueue(
@@ -146,7 +179,7 @@ class ClienteRepository {
       entityLocalId: localId,
       operation: 'create',
       httpMethod: 'POST',
-      endpoint: '/customer',
+      endpoint: '/salesperson/auth/prospects',
       payload: payload,
     );
 
@@ -162,6 +195,12 @@ class ClienteRepository {
       notes: notes,
       isProspect: true,
       sincronizado: false,
+      contactName: contactName,
+      city: city,
+      zoneCode: zoneCode,
+      nextFollowupDate: nextFollowupDate,
+      photo1: photo1,
+      photo2: photo2,
     );
   }
 
@@ -219,12 +258,21 @@ class ClienteRepository {
       int guardados = 0;
 
       for (var cliente in clientes) {
-        final existente = await db.query(
+        List<Map<String, dynamic>> existente = await db.query(
           'clientes',
-          where: 'id = ?',
-          whereArgs: [cliente.id],
+          where: 'id = ? OR server_id = ?',
+          whereArgs: [cliente.id, cliente.id],
           limit: 1,
         );
+
+        if (existente.isEmpty && cliente.taxId.isNotEmpty) {
+          existente = await db.query(
+            'clientes',
+            where: 'tax_id = ? AND is_prospect = 1',
+            whereArgs: [cliente.taxId],
+            limit: 1,
+          );
+        }
 
         if (existente.isEmpty) {
           await db.insert('clientes', {
@@ -232,14 +280,41 @@ class ClienteRepository {
             'name': cliente.name,
             'code_client_profit': cliente.codeClientProfit,
             'tax_id': cliente.taxId,
+            'telefono': cliente.telefono,
+            'email': cliente.email,
+            'direccion': cliente.direccion,
+            'activo': cliente.activo ? 1 : 0,
+            'tipo': cliente.tipo,
             'sincronizado': 1,
             'fecha_sync': DateTime.now().toIso8601String(),
           });
           guardados++;
+        } else {
+          final localRow = existente.first;
+          final localId = localRow['id'] as String;
+          await db.update(
+            'clientes',
+            {
+              'server_id': cliente.id,
+              'name': cliente.name,
+              'code_client_profit': cliente.codeClientProfit,
+              'tax_id': cliente.taxId,
+              'telefono': cliente.telefono,
+              'email': cliente.email,
+              'direccion': cliente.direccion,
+              'activo': cliente.activo ? 1 : 0,
+              'tipo': cliente.tipo,
+              'sincronizado': 1,
+              'is_prospect': 0, // Ya se oficializó en el backend
+              'fecha_sync': DateTime.now().toIso8601String(),
+            },
+            where: 'id = ?',
+            whereArgs: [localId],
+          );
         }
       }
 
-      print('✅ $guardados clientes nuevos guardados localmente');
+      print('✅ Sincronización de clientes completada ($guardados nuevos)');
       return guardados;
     } catch (e) {
       print('❌ Error sincronizando clientes: $e');

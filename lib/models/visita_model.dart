@@ -12,6 +12,7 @@ class VisitaModel {
   final int priority;
   final String status;
   final String? completedAt;
+  final bool sincronizado;
 
   VisitaModel({
     required this.id,
@@ -27,6 +28,7 @@ class VisitaModel {
     this.priority = 1,
     this.status = 'PENDING',
     this.completedAt,
+    this.sincronizado = false,
   });
 
   factory VisitaModel.fromJson(Map<String, dynamic> json) {
@@ -46,6 +48,7 @@ class VisitaModel {
           : int.tryParse(json['priority']?.toString() ?? '1') ?? 1,
       status: json['status']?.toString() ?? 'PENDING',
       completedAt: json['completed_at']?.toString(),
+      sincronizado: json['sincronizado'] == 1 || json['sincronizado'] == true,
     );
   }
 
@@ -106,5 +109,6 @@ class VisitaModel {
     'priority': priority,
     'status': status,
     'completed_at': completedAt,
+    'sincronizado': sincronizado ? 1 : 0,
   };
 }

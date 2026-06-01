@@ -124,22 +124,35 @@ class SyncService {
   /// Descarga los clientes asignados desde el servidor y los guarda localmente
   Future<Map<String, int>> descargarDatosFromServer({String? email, String? password}) async {
     int clientesDescargados = 0;
+    int visitasDescargadas = 0;
+    int preguntasDescargadas = 0;
     int errores = 0;
 
     try {
       final conectado = await ConnectivityService.instance.isConnected();
       if (!conectado) {
         print('📴 Sin conexión para descargar datos');
-        return {'clientes': 0, 'errores': 1};
+        return {
+          'clientes': 0,
+          'visitas': 0,
+          'preguntas': 0,
+          'errores': 1,
+        };
       }
 
       // Autenticar online
       final autenticado = await _authenticateOnline(email: email, password: password);
       if (!autenticado) {
         print('❌ No se pudo autenticar online');
-        return {'clientes': 0, 'errores': 1};
+        return {
+          'clientes': 0,
+          'visitas': 0,
+          'preguntas': 0,
+          'errores': 1,
+        };
       }
 
+      // 1. Descargar clientes
       print('📥 Descargando clientes asignados desde el servidor...');
       final clientes = await GenericRepository.instance.getListOnline<Map<String, dynamic>>(
         path: '/salesperson/me/customers',
@@ -152,6 +165,110 @@ class SyncService {
         clientesDescargados = clientes.length;
         print('✅ $clientesDescargados clientes guardados localmente');
       }
+
+      // 2. Descargar visitas programadas
+      print('📥 Descargando visitas programadas desde el servidor...');
+      String? username = email;
+      String? pass = password;
+      if (username == null || pass == null) {
+        final userId = AuthService.instance.userId;
+        if (userId != null) {
+          final userLocal = await _db.getUsuario(userId);
+          if (userLocal != null) {
+            username = userLocal['username'];
+            pass = userLocal['password'];
+          }
+        }
+      }
+
+      if (username != null && pass != null) {
+        final res = await GenericRepository.instance.executeRequest(
+          method: 'POST',
+          endpoint: '/salesperson/auth/visits/list',
+          payload: {
+            'email': username,
+            'password': pass,
+            'page': 1,
+            'limit': 200,
+          },
+        );
+
+        if (res.statusCode == 200 || res.statusCode == 201) {
+          final jsonResponse = jsonDecode(res.body);
+          if (jsonResponse is Map<String, dynamic> && jsonResponse.containsKey('schedules')) {
+            final List<dynamic> schedulesList = jsonResponse['schedules'] as List;
+            final List<Map<String, dynamic>> visitas = schedulesList
+                .map((item) => Map<String, dynamic>.from(item as Map))
+                .toList();
+
+            if (visitas.isNotEmpty) {
+              await _db.guardarVisitas(visitas);
+              visitasDescargadas = visitas.length;
+              print('✅ $visitasDescargadas visitas guardadas localmente');
+            }
+          }
+        } else {
+          print('❌ Error al descargar visitas programadas (Status: ${res.statusCode})');
+        }
+      } else {
+        print('⚠️ No se encontraron credenciales para descargar visitas programadas');
+      }
+
+      // 3. Descargar preguntas del formulario de visitas
+      print('📥 Descargando preguntas del formulario desde el servidor...');
+      final preguntas = await GenericRepository.instance.getListOnline<Map<String, dynamic>>(
+        path: '/visit/questions',
+        fromJson: (json) => json,
+      );
+
+      if (preguntas.isNotEmpty) {
+        const plantillaId = 'encuesta_general';
+        await _db.guardarPlantillaEncuesta(
+          id: plantillaId,
+          titulo: 'Encuesta de Visita',
+          descripcion: 'Cuestionario general de visitas a clientes',
+        );
+
+        for (var pregunta in preguntas) {
+          final id = pregunta['id']?.toString() ?? '';
+          final descripcion = pregunta['description']?.toString() ?? '';
+          final tipo = pregunta['question_type']?.toString() ?? 'TEXT';
+          final esRequerida = (pregunta['is_required'] == true || pregunta['is_required'] == 1) ? 1 : 0;
+          
+          String? opcionesCSV;
+          final opts = pregunta['response_options'];
+          if (opts != null) {
+            try {
+              if (opts is String && opts.isNotEmpty) {
+                final parsed = jsonDecode(opts);
+                if (parsed is List) {
+                  opcionesCSV = parsed.join(', ');
+                } else {
+                  opcionesCSV = opts;
+                }
+              } else if (opts is List) {
+                opcionesCSV = opts.join(', ');
+              }
+            } catch (_) {
+              opcionesCSV = opts.toString();
+            }
+          }
+
+          final orden = int.tryParse(pregunta['sort_order']?.toString() ?? '0') ?? 0;
+
+          await _db.guardarPreguntaTemplate(
+            id: id,
+            encuestaId: plantillaId,
+            descripcion: descripcion,
+            tipo: tipo,
+            esRequerida: esRequerida,
+            opciones: opcionesCSV,
+            orden: orden,
+          );
+        }
+        preguntasDescargadas = preguntas.length;
+        print('✅ $preguntasDescargadas preguntas guardadas localmente');
+      }
     } catch (e) {
       errores++;
       print('❌ Error en descargarDatosFromServer: $e');
@@ -159,6 +276,8 @@ class SyncService {
 
     return {
       'clientes': clientesDescargados,
+      'visitas': visitasDescargadas,
+      'preguntas': preguntasDescargadas,
       'errores': errores,
     };
   }

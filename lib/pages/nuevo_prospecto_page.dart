@@ -4,6 +4,7 @@ import '../core/app_colors.dart';
 import '../repositories/cliente_repository.dart';
 import '../atoms/app_button.dart';
 import '../atoms/app_text_field.dart';
+import '../atoms/photo_capture_widget.dart';
 
 class NuevoProspectoPage extends StatefulWidget {
   const NuevoProspectoPage({super.key});
@@ -22,11 +23,17 @@ class _NuevoProspectoPageState extends State<NuevoProspectoPage> {
   final _emailCtrl = TextEditingController();
   final _direccionCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
+  final _contactNameCtrl = TextEditingController();
+  final _cityCtrl = TextEditingController();
+  final _zoneCodeCtrl = TextEditingController();
 
   double? _lat;
   double? _lng;
   bool _saving = false;
   bool _fetchingGps = false;
+  DateTime? _nextFollowupDate;
+  String? _photo1Base64;
+  String? _photo2Base64;
 
   @override
   void dispose() {
@@ -36,6 +43,9 @@ class _NuevoProspectoPageState extends State<NuevoProspectoPage> {
     _emailCtrl.dispose();
     _direccionCtrl.dispose();
     _notesCtrl.dispose();
+    _contactNameCtrl.dispose();
+    _cityCtrl.dispose();
+    _zoneCodeCtrl.dispose();
     super.dispose();
   }
 
@@ -84,6 +94,14 @@ class _NuevoProspectoPageState extends State<NuevoProspectoPage> {
         notes: _notesCtrl.text.trim(),
         lat: _lat,
         lng: _lng,
+        contactName: _contactNameCtrl.text.trim(),
+        city: _cityCtrl.text.trim(),
+        zoneCode: _zoneCodeCtrl.text.trim(),
+        nextFollowupDate: _nextFollowupDate != null 
+            ? "${_nextFollowupDate!.year}-${_nextFollowupDate!.month.toString().padLeft(2, '0')}-${_nextFollowupDate!.day.toString().padLeft(2, '0')}"
+            : null,
+        photo1: _photo1Base64,
+        photo2: _photo2Base64,
       );
       if (!mounted) return;
       _showSnack('✅ Prospecto guardado. Se subirá al recuperar conexión.');
@@ -134,6 +152,8 @@ class _NuevoProspectoPageState extends State<NuevoProspectoPage> {
                 icon: Icons.badge,
               ),
               const SizedBox(height: 12),
+              _required(_contactNameCtrl, 'Nombre de Contacto', Icons.person),
+              const SizedBox(height: 12),
               AppTextField(
                 controller: _telefonoCtrl,
                 labelText: 'Teléfono',
@@ -151,10 +171,48 @@ class _NuevoProspectoPageState extends State<NuevoProspectoPage> {
               ),
               const SizedBox(height: 12),
               AppTextField(
+                controller: _cityCtrl,
+                labelText: 'Ciudad',
+                hintText: 'Caracas, Maracaibo...',
+                icon: Icons.location_city,
+              ),
+              const SizedBox(height: 12),
+              AppTextField(
+                controller: _zoneCodeCtrl,
+                labelText: 'Código de Zona (ej: VE-MI)',
+                hintText: 'VE-MI',
+                icon: Icons.map,
+              ),
+              const SizedBox(height: 12),
+              AppTextField(
                 controller: _direccionCtrl,
                 labelText: 'Dirección',
                 hintText: 'Av. Principal, Edificio…',
                 icon: Icons.location_on,
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.calendar_today, color: AppColors.primaryColor),
+                title: Text(_nextFollowupDate == null 
+                    ? 'Fecha de Siguiente Seguimiento'
+                    : 'Seguimiento: ${_nextFollowupDate!.day}/${_nextFollowupDate!.month}/${_nextFollowupDate!.year}'),
+                trailing: TextButton(
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: DateTime.now().add(const Duration(days: 7)),
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                    );
+                    if (picked != null) {
+                      setState(() {
+                        _nextFollowupDate = picked;
+                      });
+                    }
+                  },
+                  child: const Text('Seleccionar'),
+                ),
               ),
               const SizedBox(height: 12),
               AppTextField(
@@ -165,6 +223,33 @@ class _NuevoProspectoPageState extends State<NuevoProspectoPage> {
               ),
               const SizedBox(height: 16),
               _ubicacionCard(),
+              const SizedBox(height: 16),
+              const Text(
+                'Evidencias fotográficas (opcional)',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: PhotoCaptureWidget(
+                      label: 'Foto del local',
+                      onPhotoTaken: (file, base64) {
+                        _photo1Base64 = base64;
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: PhotoCaptureWidget(
+                      label: 'Foto adicional',
+                      onPhotoTaken: (file, base64) {
+                        _photo2Base64 = base64;
+                      },
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 24),
               AppButton(
                 text: _saving ? 'Guardando…' : 'Guardar Prospecto',

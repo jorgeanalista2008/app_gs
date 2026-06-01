@@ -20,7 +20,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 7,
+      version: 8,
       onCreate: (db, version) async {
         await _createTables(db);
       },
@@ -66,6 +66,9 @@ class DatabaseHelper {
         if (oldVersion < 7) {
           await _addProspectColumns(db);
           await _createIdMappingTable(db);
+        }
+        if (oldVersion < 8) {
+          await _addProspectPhotosAndExtraFields(db);
         }
       },
     );
@@ -138,7 +141,13 @@ class DatabaseHelper {
         notes TEXT,
         lat REAL,
         lng REAL,
-        coordenadas_actualizadas INTEGER DEFAULT 0
+        coordenadas_actualizadas INTEGER DEFAULT 0,
+        contact_name TEXT,
+        city TEXT,
+        zone_code TEXT,
+        next_followup_date TEXT,
+        photo_1 TEXT,
+        photo_2 TEXT
       )
     ''');
 
@@ -230,6 +239,24 @@ class DatabaseHelper {
       'is_prospect': 'INTEGER DEFAULT 0',
       'server_id': 'TEXT',
       'notes': 'TEXT',
+    };
+    for (final entry in cols.entries) {
+      try {
+        await db.execute(
+            'ALTER TABLE clientes ADD COLUMN ${entry.key} ${entry.value}');
+      } catch (_) {}
+    }
+  }
+
+  /// Migración v7→v8: columnas para fotos de prospecto + datos extra.
+  Future<void> _addProspectPhotosAndExtraFields(Database db) async {
+    const cols = {
+      'contact_name': 'TEXT',
+      'city': 'TEXT',
+      'zone_code': 'TEXT',
+      'next_followup_date': 'TEXT',
+      'photo_1': 'TEXT',
+      'photo_2': 'TEXT',
     };
     for (final entry in cols.entries) {
       try {
@@ -666,7 +693,7 @@ class DatabaseHelper {
       print('✅ Usuario maestro creado');
     }
 
-    final vendedorExistente = await db.query('usuarios', where: 'username = ?', whereArgs: ['vendedor@solsumed']);
+    final vendedorExistente = await db.query('usuarios', where: 'username = ?', whereArgs: ['vendedor@solsumed.com']);
     if (vendedorExistente.isEmpty) {
       await db.insert('usuarios', {
         'id': 'vendedor-001',

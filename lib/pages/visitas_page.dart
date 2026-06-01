@@ -4,12 +4,14 @@ import '../models/visita_model.dart';
 import '../repositories/visita_repository.dart';
 import '../repositories/generic_repository.dart';
 import '../atoms/app_button.dart';
+import '../atoms/app_text_field.dart';
 import 'encuesta_page.dart';
 import '../services/database_helper.dart';
 import '../services/sync_service.dart';
 import '../services/auth_service.dart';
 import '../services/connectivity_service.dart';
-import '../pages/nueva_visita_page.dart';
+import 'nueva_visita_page.dart';
+import 'dart:convert';
 
 class VisitasPage extends StatefulWidget {
   const VisitasPage({super.key});
@@ -18,83 +20,54 @@ class VisitasPage extends StatefulWidget {
   State<VisitasPage> createState() => _VisitasPageState();
 }
 
-class _VisitasPageState extends State<VisitasPage> {
+class _VisitasPageState extends State<VisitasPage> with SingleTickerProviderStateMixin {
   final VisitaRepository _visitaRepo = VisitaRepository();
-  final ScrollController _scrollController = ScrollController();
+  final DatabaseHelper _db = DatabaseHelper.instance;
+  final AuthService _authService = AuthService.instance;
+  final TextEditingController _searchController = TextEditingController();
+  late final TabController _tabController;
 
-  List<VisitaModel> _visitas = [];
+  List<VisitaModel> _programadas = [];
+  List<VisitaModel> _completadas = [];
+  List<VisitaModel> _visitasFiltradas = [];
   bool _isLoading = true;
-  bool _isLoadingMore = false;
   String? _error;
-  int _currentPage = 1;
-  bool _hasMorePages = true;
-  static const int _limit = 25;
-
-  late String _dateFrom;
-  late String _dateTo;
-  String _mesLabel = '';
+  int _pendingUploads = 0;
 
   @override
   void initState() {
     super.initState();
-    _setCurrentMonth();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) _aplicarFiltro();
+    });
     _loadVisitas();
-    _scrollController.addListener(_onScroll);
-  }
-  
-  // Helper para color de prioridad (en la página, no en el modelo)
-Color _getPrioridadColor(int priority) {
-  switch (priority) {
-    case 1: return Colors.red;
-    case 2: return Colors.orange;
-    case 3: return Colors.yellow;
-    case 4: return Colors.green;
-    case 5: return Colors.grey;
-    default: return Colors.grey;
-  }
-}
-  void _setCurrentMonth() {
-    final now = DateTime.now();
-    final firstDay = DateTime(now.year, now.month, 1);
-    final lastDay = DateTime(now.year, now.month + 1, 0);
-
-    _dateFrom = '${firstDay.year}-${firstDay.month.toString().padLeft(2, '0')}-01';
-    _dateTo = '${lastDay.year}-${lastDay.month.toString().padLeft(2, '0')}-${lastDay.day.toString().padLeft(2, '0')}';
-
-    const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-                   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    _mesLabel = '${meses[now.month - 1]} ${now.year}';
   }
 
-  void _onScroll() {
-    if (_scrollController.position.pixels >=
-            _scrollController.position.maxScrollExtent - 200 &&
-        !_isLoadingMore &&
-        _hasMorePages) {
-      _loadMoreVisitas();
-    }
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadVisitas() async {
     setState(() {
       _isLoading = true;
       _error = null;
-      _currentPage = 1;
     });
 
     try {
-      final visitas = await _visitaRepo.getMisVisitas(
-        dateFrom: _dateFrom,
-        dateTo: _dateTo,
-        page: _currentPage,
-        limit: _limit,
-      );
+      final visitas = await _visitaRepo.getVisitasLocales();
+      final pendingCount = await _db.contarRespuestasPendientes();
       if (mounted) {
         setState(() {
-          _visitas = visitas;
+          _programadas = visitas.where((v) => v.isPendiente).toList();
+          _completadas = visitas.where((v) => v.isCompletada).toList();
+          _pendingUploads = pendingCount;
           _isLoading = false;
-          _hasMorePages = visitas.length >= _limit;
         });
+        _aplicarFiltro();
       }
     } catch (e) {
       if (mounted) {
@@ -106,661 +79,204 @@ Color _getPrioridadColor(int priority) {
     }
   }
 
-  Future<void> _loadMoreVisitas() async {
-    if (_isLoadingMore || !_hasMorePages) return;
-    setState(() => _isLoadingMore = true);
-    try {
-      _currentPage++;
-      final nuevasVisitas = await _visitaRepo.getMisVisitas(
-        dateFrom: _dateFrom,
-        dateTo: _dateTo,
-        page: _currentPage,
-        limit: _limit,
-      );
-      if (mounted) {
-        setState(() {
-          _visitas.addAll(nuevasVisitas);
-          _isLoadingMore = false;
-          _hasMorePages = nuevasVisitas.length >= _limit;
-        });
+  void _aplicarFiltro() {
+    final base = _tabController.index == 0 ? _programadas : _completadas;
+    final query = _searchController.text.trim().toLowerCase();
+    setState(() {
+      if (query.isEmpty) {
+        _visitasFiltradas = base;
+      } else {
+        _visitasFiltradas = base.where((v) {
+          return v.customerName.toLowerCase().contains(query) ||
+              v.codeClientProfit.toLowerCase().contains(query) ||
+              v.taxId.toLowerCase().contains(query) ||
+              v.city.toLowerCase().contains(query) ||
+              v.notes.toLowerCase().contains(query);
+        }).toList();
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoadingMore = false;
-          _currentPage--;
-        });
-      }
-    }
+    });
   }
 
-  Future<void> _ejecutarSincronizacionCompleta({String? email, String? password}) async {
+  Future<void> _descargarVisitas({String? email, String? password}) async {
     final conectado = await ConnectivityService.instance.isConnected();
     if (!conectado) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('⚠️ Sin conexión a internet para sincronizar.'),
+            content: Text('📴 Sin conexión a internet para descargar visitas.'),
             backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
       return;
     }
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(
-            children: [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2,
-                ),
-              ),
-              SizedBox(width: 12),
-              Text('Autenticando con el servidor...'),
-            ],
-          ),
-          duration: Duration(seconds: 30),
-        ),
-      );
-    }
+    setState(() => _isLoading = true);
 
-    final autenticado = await SyncService.instance.authenticateOnline(email: email, password: password);
-    if (!autenticado) {
+    try {
+      final resDescarga = await SyncService.instance.descargarDatosFromServer(
+        email: email,
+        password: password,
+      );
+
+      final clientesDescargados = resDescarga['clientes'] ?? 0;
+      final visitasDescargadas = resDescarga['visitas'] ?? 0;
+      final preguntasDescargadas = resDescarga['preguntas'] ?? 0;
+      final erroresDescarga = resDescarga['errores'] ?? 0;
+
       if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        if (erroresDescarga > 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ Error en el servidor al descargar datos.'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '📥 Sincronización completa:\n'
+                '• Clientes: $clientesDescargados\n'
+                '• Visitas programadas: $visitasDescargadas\n'
+                '• Preguntas descargadas: $preguntasDescargadas',
+              ),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        _loadVisitas();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error al descargar: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _subirVisitas({String? email, String? password}) async {
+    final conectado = await ConnectivityService.instance.isConnected();
+    if (!conectado) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('❌ Error de autenticación: Credenciales del servidor incorrectas.'),
-            backgroundColor: Colors.red,
+            content: Text('📴 Sin conexión a internet para subir datos.'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
           ),
         );
-        _mostrarDialogCredencialesSync();
       }
       return;
     }
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(
-            children: [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2,
-                ),
-              ),
-              SizedBox(width: 12),
-              Text('Sincronizando datos...'),
-            ],
-          ),
-          duration: Duration(seconds: 30),
-        ),
+    setState(() => _isLoading = true);
+
+    try {
+      final resSubida = await SyncService.instance.marcarTodoSincronizado(
+        email: email,
+        password: password,
       );
+
+      final subidas = resSubida['marcadas'] ?? 0;
+      final erroresSubida = resSubida['errores'] ?? 0;
+
+      if (mounted) {
+        if (erroresSubida > 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('⚠️ Se subieron $subidas visitas, pero hubo $erroresSubida errores.'),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('⬆️ Sincronización exitosa: $subidas visitas enviadas al servidor.'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        _loadVisitas();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error al subir visitas: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
+  }
 
-    final resSubida = await SyncService.instance.marcarTodoSincronizado(email: email, password: password);
-    final subidas = resSubida['marcadas'] ?? 0;
-    final erroresSubida = resSubida['errores'] ?? 0;
-
-    final resDescarga = await SyncService.instance.descargarDatosFromServer(email: email, password: password);
-    final clientesDescargados = resDescarga['clientes'] ?? 0;
-    final erroresDescarga = resDescarga['errores'] ?? 0;
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      
-      final totalErrores = erroresSubida + erroresDescarga;
+  void _syncDownloadPressed() {
+    final usuario = _authService.currentUser;
+    if (usuario == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Sincronización completa: '
-            '⬆️ $subidas enviadas, '
-            '📥 $clientesDescargados clientes actualizados'
-            '${totalErrores > 0 ? " ($totalErrores errores)" : ""}',
-          ),
-          backgroundColor: totalErrores == 0 
-              ? Colors.green 
-              : Colors.orange,
-        ),
+        const SnackBar(content: Text('No hay sesión activa'), backgroundColor: Colors.red),
       );
+      return;
+    }
+    _descargarVisitas(
+      email: usuario['username'] ?? '',
+      password: usuario['password'] ?? '',
+    );
+  }
 
+  void _syncUploadPressed() {
+    final usuario = _authService.currentUser;
+    if (usuario == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay sesión activa'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+    _subirVisitas(
+      email: usuario['username'] ?? '',
+      password: usuario['password'] ?? '',
+    );
+  }
+
+  Color _getPrioridadColor(int priority) {
+    switch (priority) {
+      case 1:
+        return Colors.red;
+      case 2:
+        return Colors.orange;
+      case 3:
+        return Colors.blue;
+      case 4:
+        return Colors.green;
+      case 5:
+        return Colors.grey;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Future<void> _abrirNuevaVisita() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const NuevaVisitaPage()),
+    );
+    if (result == true) {
       _loadVisitas();
     }
-  }
-
-  void _mostrarDialogCredencialesSync() {
-    final emailController = TextEditingController();
-    final passwordController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    bool obscurePassword = true;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              title: Row(
-                children: [
-                  Icon(Icons.sync_lock, color: AppColors.primaryColor),
-                  const SizedBox(width: 10),
-                  const Text(
-                    'Credenciales de Servidor',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                  ),
-                ],
-              ),
-              content: Form(
-                key: formKey,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'Ingrese el correo y contraseña que le asignó el administrador para sincronizar con el servidor.',
-                        style: TextStyle(fontSize: 14, color: Colors.black87),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: InputDecoration(
-                          labelText: 'Correo Electrónico',
-                          prefixIcon: const Icon(Icons.email_outlined),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: AppColors.primaryColor, width: 2),
-                          ),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'El correo es requerido';
-                          }
-                          if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value.trim())) {
-                            return 'Ingrese un correo válido';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: passwordController,
-                        obscureText: obscurePassword,
-                        decoration: InputDecoration(
-                          labelText: 'Contraseña',
-                          prefixIcon: const Icon(Icons.lock_outline),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                obscurePassword = !obscurePassword;
-                              });
-                            },
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: AppColors.primaryColor, width: 2),
-                          ),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'La contraseña es requerida';
-                          }
-                          return null;
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    if (formKey.currentState!.validate()) {
-                      final email = emailController.text.trim();
-                      final password = passwordController.text;
-                      
-                      Navigator.pop(context); // Close dialog
-                      
-                      // Run synchronization with these credentials
-                      await _ejecutarSincronizacionCompleta(email: email, password: password);
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryColor,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text('Sincronizar'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-@override
-Widget build(BuildContext context) {
-  return Scaffold(
-    backgroundColor: Colors.grey[50],
-    appBar: AppBar(
-      title: const Text('Mis Visitas'),
-      backgroundColor: AppColors.primaryColor,
-      foregroundColor: Colors.white,
-      elevation: 0,
-      actions: [
-        // Botón de sincronización con contador
-        FutureBuilder<int>(
-         future: DatabaseHelper.instance.contarRespuestasPendientes(), // ← CAMBIADO
-          builder: (context, snapshot) {
-            final pendientes = snapshot.data ?? 0;
-            return Stack(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.sync),
-                  tooltip: 'Sincronizar encuestas pendientes',
-                  onPressed: () async {
-                    final currentUser = AuthService.instance.currentUser;
-                    final localUsername = currentUser?['username']?.toString();
-                    
-                    if (localUsername == 'vendedor@solsumed') {
-                      _mostrarDialogCredencialesSync();
-                    } else {
-                      await _ejecutarSincronizacionCompleta();
-                    }
-                  },
-                ),
-                // Badge contador
-                if (pendientes > 0)
-                  Positioned(
-                    top: 6,
-                    right: 4,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 18,
-                        minHeight: 18,
-                      ),
-                      child: Text(
-                        pendientes > 99 ? '99+' : pendientes.toString(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          },
-        ),
-          IconButton(
-            icon: const Icon(Icons.add),
-            tooltip: 'Nueva Visita',
-            onPressed: () async {
-              final result = await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const NuevaVisitaPage()),
-              );
-              if (result == true) _loadVisitas();
-            },
-          ),
-      ],
-    ),
-    body: Column(
-      children: [
-        // Cabecera
-        Container(
-          padding: const EdgeInsets.all(16),
-          color: Colors.white,
-          child: Row(
-            children: [
-              Icon(Icons.calendar_month, color: AppColors.primaryColor),
-              const SizedBox(width: 10),
-              Text(
-                _mesLabel,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const Spacer(),
-              _buildStatusFilter(),
-            ],
-          ),
-        ),
-        Expanded(child: _buildContent()),
-      ],
-    ),
-
-  );
-}
-
-  Widget _buildStatusFilter() {
-    final pendientes = _visitas.where((v) => v.isPendiente).length;
-    final completadas = _visitas.where((v) => v.isCompletada).length;
-
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: Colors.orange.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            '$pendientes pendientes',
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.orange),
-          ),
-        ),
-        if (completadas > 0) ...[
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              '$completadas completadas',
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.green),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildContent() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.primaryColor));
-    }
-
-    if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline, size: 60, color: Colors.grey[400]),
-              const SizedBox(height: 16),
-              Text(_error!, style: TextStyle(color: Colors.grey[600]), textAlign: TextAlign.center),
-              const SizedBox(height: 16),
-              AppButton(text: 'Reintentar', onPressed: _loadVisitas),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (_visitas.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.assignment_outlined, size: 80, color: Colors.grey[300]),
-            const SizedBox(height: 16),
-            const Text('No tienes visitas este mes', style: TextStyle(fontSize: 16, color: Colors.grey)),
-          ],
-        ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadVisitas,
-      color: AppColors.primaryColor,
-      child: ListView.builder(
-        controller: _scrollController,
-        padding: const EdgeInsets.all(16),
-        itemCount: _visitas.length + (_hasMorePages ? 1 : 0),
-        itemBuilder: (context, index) {
-          if (index == _visitas.length) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(color: AppColors.primaryColor),
-              ),
-            );
-          }
-          return _buildVisitaCard(_visitas[index]);
-        },
-      ),
-    );
-  }
-
-  Widget _buildVisitaCard(VisitaModel visita) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: visita.isPendiente ? 3 : 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: InkWell(
-        onTap: () => _onVisitaTapped(visita),
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: visita.isCompletada
-                ? Border.all(color: Colors.green.withOpacity(0.3))
-                : null,
-          ),
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Primera fila: Fecha + Prioridad + Estado
-              Row(
-                children: [
-                  // Fecha
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: visita.isCompletada
-                          ? Colors.green.withOpacity(0.08)
-                          : AppColors.primaryColor.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          visita.mesAbreviado,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: visita.isCompletada ? Colors.green : AppColors.primaryColor,
-                          ),
-                        ),
-                        Text(
-                          visita.diaNumero,
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: visita.isCompletada ? Colors.green : AppColors.primaryColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-
-                  // Cliente y dirección
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          visita.customerName,
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                        ),
-                        const SizedBox(height: 2),
-                        if (visita.city.isNotEmpty)
-                          Row(
-                            children: [
-                              Icon(Icons.location_on, size: 12, color: Colors.grey[400]),
-                              const SizedBox(width: 3),
-                              Expanded(
-                                child: Text(
-                                  visita.city,
-                                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'RIF: ${visita.taxId}',
-                          style: TextStyle(fontSize: 11, color: Colors.grey[400]),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Prioridad
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                     color: _getPrioridadColor(visita.priority),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: _getPrioridadColor(visita.priority).withOpacity(0.3)),
-                    ),
-                    child: Text(
-                      visita.prioridadTexto,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                       
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              // Notas (si hay)
-              if (visita.notes.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.note_alt, size: 14, color: Colors.grey[500]),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          visita.notes,
-                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: 10),
-
-              // Fechas y estado
-              Row(
-                children: [
-                  Icon(Icons.date_range, size: 12, color: Colors.grey[400]),
-                  const SizedBox(width: 4),
-                  Text(
-                    visita.fechaRango,
-                    style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-                  ),
-                  const Spacer(),
-                  // Estado
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: visita.isPendiente
-                          ? Colors.orange.withOpacity(0.1)
-                          : Colors.green.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: visita.isPendiente
-                            ? Colors.orange.withOpacity(0.3)
-                            : Colors.green.withOpacity(0.3),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          visita.isPendiente ? Icons.pending : Icons.check_circle,
-                          size: 12,
-                          color: visita.isPendiente ? Colors.orange : Colors.green,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          visita.isPendiente ? 'Pendiente' : 'Completada',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: visita.isPendiente ? Colors.orange : Colors.green,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   void _onVisitaTapped(VisitaModel visita) async {
@@ -774,7 +290,6 @@ Widget build(BuildContext context) {
       return;
     }
 
-    // Obtener plantillas de encuestas disponibles
     final plantillas = await DatabaseHelper.instance.getPlantillasEncuestas();
 
     if (!mounted) return;
@@ -805,7 +320,6 @@ Widget build(BuildContext context) {
       return;
     }
 
-    // Mostrar modal con las encuestas disponibles
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -871,7 +385,7 @@ Widget build(BuildContext context) {
                             : null,
                         trailing: const Icon(Icons.chevron_right, size: 20, color: AppColors.primaryColor),
                         onTap: () async {
-                          Navigator.pop(context); // Cerrar bottom sheet
+                          Navigator.pop(context);
 
                           final resultado = await Navigator.push(
                             context,
@@ -900,424 +414,335 @@ Widget build(BuildContext context) {
     );
   }
 
-  void _onNuevaVisitaPressed() async {
-    // 1. Cargar clientes y plantillas encuestas de SQLite
-    final clientes = await DatabaseHelper.instance.getClientes();
-    final plantillas = await DatabaseHelper.instance.getPlantillasEncuestas();
-
-    if (!mounted) return;
-
-    if (clientes.isEmpty) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
+  Widget _buildVisitaCard(VisitaModel visita) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        onTap: () => _onVisitaTapped(visita),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.orange),
-              SizedBox(width: 10),
-              Text('Sin Clientes', style: TextStyle(fontWeight: FontWeight.bold)),
-            ],
-          ),
-          content: const Text(
-            'No hay clientes registrados localmente.\n\nPor favor, conéctese a internet y sincronice los datos para descargar sus clientes asignados.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Entendido'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    if (plantillas.isEmpty) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
-            children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.orange),
-              SizedBox(width: 10),
-              Text('Sin Encuestas', style: TextStyle(fontWeight: FontWeight.bold)),
-            ],
-          ),
-          content: const Text(
-            'El administrador no ha configurado ninguna encuesta en el sistema.\n\nPor favor, contacte al administrador para crear una encuesta y sus preguntas desde el panel de administración.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Entendido'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    // Controladores de estado para el bottom sheet
-    int currentStep = 1;
-    Map<String, dynamic>? selectedCustomer;
-    Map<String, dynamic>? selectedTemplate;
-    int selectedPriority = 3; // Normal por defecto
-    final notesController = TextEditingController();
-    String searchCustomerQuery = '';
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setModalState) {
-            // Filtrar clientes
-            final filteredClientes = clientes.where((c) {
-              final name = (c['name'] ?? '').toString().toLowerCase();
-              final rif = (c['tax_id'] ?? '').toString().toLowerCase();
-              final code = (c['code_client_profit'] ?? '').toString().toLowerCase();
-              final query = searchCustomerQuery.toLowerCase();
-              return name.contains(query) || rif.contains(query) || code.contains(query);
-            }).toList();
-
-            return Padding(
-              padding: EdgeInsets.only(
-                top: 20,
-                left: 20,
-                right: 20,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-              ),
-              child: Container(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.75,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Indicador de pasos
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: AppColors.primaryColor.withOpacity(0.1),
+                    child: Text(
+                      visita.customerName.isNotEmpty ? visita.customerName[0].toUpperCase() : '?',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primaryColor,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          currentStep == 1
-                              ? 'Paso 1: Seleccionar Cliente'
-                              : currentStep == 2
-                                  ? 'Paso 2: Seleccionar Encuesta'
-                                  : 'Paso 3: Detalles de Visita',
+                          visita.customerName,
                           style: const TextStyle(
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.primaryColor,
+                            color: AppColors.textPrimary,
                           ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        Text(
-                          '$currentStep/3',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Divider(height: 20),
-
-                    // Contenido del paso actual
-                    if (currentStep == 1) ...[
-                      // Buscador
-                      TextField(
-                        decoration: InputDecoration(
-                          hintText: 'Buscar cliente por nombre o RIF...',
-                          prefixIcon: const Icon(Icons.search),
-                          filled: true,
-                          fillColor: Colors.grey[100],
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                        onChanged: (val) {
-                          setModalState(() {
-                            searchCustomerQuery = val;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: filteredClientes.length,
-                          itemBuilder: (context, index) {
-                            final c = filteredClientes[index];
-                            final name = c['name'] ?? 'Sin nombre';
-                            final rif = c['tax_id'] ?? 'Sin RIF';
-                            final code = c['code_client_profit'] ?? '';
-
-                            return Card(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                side: BorderSide(color: Colors.grey[200]!),
-                              ),
-                              child: ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: AppColors.primaryColor.withOpacity(0.08),
-                                  child: const Icon(Icons.person, color: AppColors.primaryColor),
-                                ),
-                                title: Text(
-                                  name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                    color: AppColors.textPrimary,
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  'RIF: $rif ${code.isNotEmpty ? "• Código: $code" : ""}',
-                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                                ),
-                                onTap: () {
-                                  setModalState(() {
-                                    selectedCustomer = c;
-                                    currentStep = 2;
-                                  });
-                                },
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ] else if (currentStep == 2) ...[
-                      // Seleccionar Encuesta
-                      Expanded(
-                        child: ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: plantillas.length,
-                          itemBuilder: (context, index) {
-                            final p = plantillas[index];
-                            final titulo = p['titulo'] ?? 'Encuesta sin título';
-                            final desc = p['descripcion'] ?? '';
-
-                            return Card(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                side: BorderSide(color: Colors.grey[200]!),
-                              ),
-                              child: ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: Colors.green.withOpacity(0.08),
-                                  child: const Icon(Icons.assignment_outlined, color: Colors.green),
-                                ),
-                                title: Text(
-                                  titulo,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                    color: AppColors.textPrimary,
-                                  ),
-                                ),
-                                subtitle: desc.isNotEmpty
-                                    ? Text(
-                                        desc,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                                      )
-                                    : null,
-                                onTap: () {
-                                  setModalState(() {
-                                    selectedTemplate = p;
-                                    currentStep = 3;
-                                  });
-                                },
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      // Botón volver
-                      TextButton.icon(
-                        onPressed: () {
-                          setModalState(() {
-                            currentStep = 1;
-                          });
-                        },
-                        icon: const Icon(Icons.arrow_back),
-                        label: const Text('Volver a Clientes'),
-                      ),
-                    ] else if (currentStep == 3) ...[
-                      // Prioridad y Notas
-                      Expanded(
-                        child: SingleChildScrollView(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                        const SizedBox(height: 4),
+                        if (visita.city.isNotEmpty)
+                          Row(
                             children: [
-                              Text(
-                                'Cliente: ${selectedCustomer?['name']}',
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                'Plantilla: ${selectedTemplate?['titulo']}',
-                                style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                              ),
-                              const SizedBox(height: 16),
-
-                              // Selector de prioridad
-                              const Text(
-                                'Prioridad de la visita:',
-                                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                children: [
-                                  ChoiceChip(
-                                    label: const Text('Baja'),
-                                    selected: selectedPriority == 4,
-                                    selectedColor: Colors.green.withOpacity(0.2),
-                                    onSelected: (selected) {
-                                      if (selected) setModalState(() => selectedPriority = 4);
-                                    },
-                                  ),
-                                  ChoiceChip(
-                                    label: const Text('Normal'),
-                                    selected: selectedPriority == 3,
-                                    selectedColor: Colors.orange.withOpacity(0.2),
-                                    onSelected: (selected) {
-                                      if (selected) setModalState(() => selectedPriority = 3);
-                                    },
-                                  ),
-                                  ChoiceChip(
-                                    label: const Text('Urgente'),
-                                    selected: selectedPriority == 2,
-                                    selectedColor: Colors.red.withOpacity(0.2),
-                                    onSelected: (selected) {
-                                      if (selected) setModalState(() => selectedPriority = 2);
-                                    },
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-
-                              // Notas
-                              const Text(
-                                'Notas / Observaciones:',
-                                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                              ),
-                              const SizedBox(height: 8),
-                              TextField(
-                                controller: notesController,
-                                maxLines: 3,
-                                decoration: InputDecoration(
-                                  hintText: 'Añadir notas para la visita...',
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
+                              Icon(Icons.location_on, size: 12, color: Colors.grey[400]),
+                              const SizedBox(width: 3),
+                              Expanded(
+                                child: Text(
+                                  visita.city,
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ],
                           ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'RIF: ${visita.taxId} | Cód: ${visita.codeClientProfit}',
+                          style: TextStyle(fontSize: 11, color: Colors.grey[500]),
                         ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _getPrioridadColor(visita.priority).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: _getPrioridadColor(visita.priority).withOpacity(0.3)),
+                    ),
+                    child: Text(
+                      visita.prioridadTexto,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: _getPrioridadColor(visita.priority),
                       ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              style: OutlinedButton.styleFrom(
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                              ),
-                              onPressed: () {
-                                setModalState(() {
-                                  currentStep = 2;
-                                });
-                              },
-                              child: const Text('Volver'),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primaryColor,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                              ),
-                              onPressed: () async {
-                                Navigator.pop(context); // Cerrar bottom sheet
-
-                                // Generar visita local
-                                final localVisitId = 'local_${DateTime.now().microsecondsSinceEpoch}';
-                                final todayStr = DateTime.now().toIso8601String().substring(0, 10);
-                                
-                                final visitData = {
-                                  'id': localVisitId,
-                                  'customer_id': selectedCustomer!['id'],
-                                  'customer_name': selectedCustomer!['name'],
-                                  'address': selectedCustomer!['direccion'] ?? '',
-                                  'city': selectedCustomer!['city'] ?? '',
-                                  'code_client_profit': selectedCustomer!['code_client_profit'] ?? '',
-                                  'tax_id': selectedCustomer!['tax_id'] ?? '',
-                                  'visit_date_from': todayStr,
-                                  'visit_date_to': todayStr,
-                                  'notes': notesController.text.trim(),
-                                  'priority': selectedPriority,
-                                  'status': 'PENDING',
-                                  'sincronizado': 0,
-                                };
-
-                                // Guardar visita localmente
-                                await GenericRepository.instance.insert(
-                                  table: 'visitas',
-                                  data: visitData,
-                                  id: localVisitId,
-                                );
-
-                                // Refrescar lista de visitas
-                                _loadVisitas();
-
-                                // Navegar a encuesta inmediatamente
-                                if (mounted) {
-                                  final visitaModel = VisitaModel.fromJson(visitData);
-                                  await Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => EncuestaPage(
-                                        visita: visitaModel,
-                                        plantillaId: selectedTemplate!['id'],
-                                        plantillaTitulo: selectedTemplate!['titulo'] ?? 'Encuesta',
-                                      ),
-                                    ),
-                                  );
-                                  _loadVisitas();
-                                }
-                              },
-                              child: const Text('COMENZAR', style: TextStyle(fontWeight: FontWeight.bold)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
+                    ),
+                  ),
+                ],
               ),
-            );
-          },
-        );
-      },
+              if (visita.notes.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey[200]!),
+                  ),
+                  child: Text(
+                    visita.notes,
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              const Divider(height: 1),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Icon(Icons.calendar_today, size: 12, color: Colors.grey[500]),
+                  const SizedBox(width: 6),
+                  Text(
+                    visita.fechaRango,
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                  const Spacer(),
+                  _buildStatusBadge(visita),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge(VisitaModel visita) {
+    late Color color;
+    late String text;
+    late IconData icon;
+
+    if (visita.isPendiente) {
+      color = Colors.orange;
+      text = 'Pendiente';
+      icon = Icons.pending_actions;
+    } else {
+      if (visita.sincronizado) {
+        color = Colors.green;
+        text = 'Sincronizada';
+        icon = Icons.cloud_done;
+      } else {
+        color = Colors.blue;
+        text = 'Completada (Sin subir)';
+        icon = Icons.cloud_upload;
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator(color: AppColors.primaryColor));
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 60, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              Text(_error!, style: TextStyle(color: Colors.grey[600]), textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              AppButton(text: 'Reintentar', onPressed: _loadVisitas),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_visitasFiltradas.isEmpty) {
+      final esProgramadas = _tabController.index == 0;
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              esProgramadas ? Icons.assignment_outlined : Icons.assignment_turned_in_outlined,
+              size: 80,
+              color: Colors.grey[300],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _searchController.text.isEmpty
+                  ? (esProgramadas
+                      ? 'No tienes visitas programadas.\nPresiona 📥 para descargar.'
+                      : 'No tienes visitas completadas.')
+                  : 'No se encontraron visitas',
+              style: TextStyle(fontSize: 16, color: Colors.grey[500]),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadVisitas,
+      color: AppColors.primaryColor,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _visitasFiltradas.length,
+        itemBuilder: (context, index) {
+          return _buildVisitaCard(_visitasFiltradas[index]);
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        title: const Text('Mis Visitas'),
+        backgroundColor: AppColors.primaryColor,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: Colors.white,
+          tabs: [
+            Tab(text: 'Programadas (${_programadas.length})'),
+            Tab(text: 'Completadas (${_completadas.length})'),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.cloud_download),
+            tooltip: 'Descargar visitas asignadas',
+            onPressed: _isLoading ? null : _syncDownloadPressed,
+          ),
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.cloud_upload),
+                tooltip: 'Subir visitas realizadas',
+                onPressed: _isLoading ? null : _syncUploadPressed,
+              ),
+              if (_pendingUploads > 0)
+                Positioned(
+                  top: 6,
+                  right: 4,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 18,
+                      minHeight: 18,
+                    ),
+                    child: Text(
+                      _pendingUploads > 99 ? '99+' : _pendingUploads.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _abrirNuevaVisita,
+        backgroundColor: AppColors.primaryColor,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add_task),
+        label: const Text('Nueva Visita'),
+      ),
+      body: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: Colors.white,
+            child: AppTextField(
+              controller: _searchController,
+              labelText: 'Buscar visita',
+              hintText: 'Cliente, RIF, código o ciudad...',
+              icon: Icons.search,
+              onSubmitted: (_) => _aplicarFiltro(),
+              onChanged: (_) => _aplicarFiltro(),
+            ),
+          ),
+          if (_searchController.text.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: AppColors.primaryColor.withOpacity(0.05),
+              child: Row(
+                children: [
+                  Text(
+                    '${_visitasFiltradas.length} resultados encontrados',
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ),
+          Expanded(child: _buildContent()),
+        ],
+      ),
     );
   }
 }

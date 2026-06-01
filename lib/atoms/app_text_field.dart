@@ -9,6 +9,7 @@ class AppTextField extends StatelessWidget {
   final IconData? icon;
   final TextInputType? keyboardType;
   final Function(String)? onSubmitted;
+  final Function(String)? onChanged;
 
   const AppTextField({
     super.key,
@@ -19,6 +20,7 @@ class AppTextField extends StatelessWidget {
     this.icon,
     this.keyboardType,
     this.onSubmitted,
+    this.onChanged,
   });
 
   @override

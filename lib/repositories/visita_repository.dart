@@ -4,6 +4,16 @@ import 'generic_repository.dart';
 class VisitaRepository {
   final GenericRepository _repo = GenericRepository.instance;
 
+  /// Obtiene todas las visitas guardadas localmente sin filtros
+  Future<List<VisitaModel>> getVisitasLocales() async {
+    final db = await _repo.getListLocal<VisitaModel>(
+      table: 'visitas',
+      orderBy: 'visit_date_from ASC',
+      fromJson: (json) => VisitaModel.fromJson(json),
+    );
+    return db;
+  }
+
   /// Obtiene las visitas guardadas localmente con filtro de fechas
   Future<List<VisitaModel>> getMisVisitas({
     required String dateFrom,
