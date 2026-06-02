@@ -7,6 +7,8 @@ import '../atoms/app_button.dart';
 import '../atoms/app_text_field.dart';
 import 'nuevo_prospecto_page.dart';
 import '../services/sync_queue_service.dart';
+import '../atoms/sync_status_chip.dart';
+import '../organisms/connection_wrapper.dart';
 
 class ClientesPage extends StatefulWidget {
   const ClientesPage({super.key});
@@ -113,14 +115,22 @@ class _ClientesPageState extends State<ClientesPage>
         password: usuario['password'] ?? '',
       );
 
+      final prospectosGuardados = await _clienteRepo.sincronizarProspectos(
+        email: usuario['username'] ?? '',
+        password: usuario['password'] ?? '',
+      );
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(guardados > 0
-                ? '✅ $guardados clientes nuevos sincronizados'
-                : '✅ Ya tienes todos los clientes actualizados'),
-            backgroundColor: guardados > 0 ? Colors.green : Colors.blue,
+            content: Text(
+              '✅ Sincronización completa:\n'
+              '• Clientes nuevos: $guardados\n'
+              '• Prospectos nuevos/actualizados: $prospectosGuardados'
+            ),
+            backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
           ),
         );
         _loadClientes();
@@ -162,6 +172,10 @@ class _ClientesPageState extends State<ClientesPage>
           ],
         ),
         actions: [
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12.0, horizontal: 4.0),
+            child: SyncStatusChip(),
+          ),
           IconButton(
             icon: const Icon(Icons.cloud_download),
             tooltip: 'Sincronizar clientes',
@@ -176,8 +190,9 @@ class _ClientesPageState extends State<ClientesPage>
         icon: const Icon(Icons.person_add),
         label: const Text('Prospecto'),
       ),
-      body: Column(
-        children: [
+      body: ConnectionWrapper(
+        child: Column(
+          children: [
           // Barra de búsqueda
           Container(
             padding: const EdgeInsets.all(16),
@@ -209,6 +224,7 @@ class _ClientesPageState extends State<ClientesPage>
           // Contenido principal
           Expanded(child: _buildContent()),
         ],
+      ),
       ),
     );
   }

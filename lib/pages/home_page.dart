@@ -4,6 +4,8 @@ import '../organisms/app_drawer.dart';
 import '../organisms/dashboard_content.dart';
 import '../services/auth_service.dart';
 import 'login_page.dart';
+import '../atoms/sync_status_chip.dart';
+import '../organisms/connection_wrapper.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -107,6 +109,12 @@ class _HomePageState extends State<HomePage> {
         title: const Text('Inicio'),
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
+        actions: const [
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
+            child: SyncStatusChip(),
+          ),
+        ],
       ),
       drawer: AppDrawer(
         userName: _userName ?? 'Usuario',
@@ -115,9 +123,11 @@ class _HomePageState extends State<HomePage> {
         userEmail: _userEmail,
         onLogout: _logout,
       ),
-      body: DashboardContent(
-        userName: _userName ?? 'Usuario',
-        userRole: _userRole ?? 'Usuario',
+      body: ConnectionWrapper(
+        child: DashboardContent(
+          userName: _userName ?? 'Usuario',
+          userRole: _userRole ?? 'Usuario',
+        ),
       ),
     );
   }

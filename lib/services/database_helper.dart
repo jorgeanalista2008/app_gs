@@ -508,7 +508,11 @@ class DatabaseHelper {
     final db = await database;
     await db.update(
       'visitas',
-      {'status': status, 'completed_at': DateTime.now().toIso8601String()},
+      {
+        'status': status,
+        'completed_at': DateTime.now().toIso8601String(),
+        'sincronizado': 0,
+      },
       where: 'id = ?',
       whereArgs: [id],
     );
@@ -601,7 +605,7 @@ class DatabaseHelper {
     final db = await database;
     return await db.update(
       'respuestas_pendientes',
-      {'sincronizado': 1, 'fecha_sync': DateTime.now().toIso8601String()},
+      {'sincronizado': 1, 'updated_at': DateTime.now().toIso8601String()},
       where: 'id = ?',
       whereArgs: [id],
     );

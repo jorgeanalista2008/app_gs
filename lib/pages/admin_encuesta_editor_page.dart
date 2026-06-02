@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../services/database_helper.dart';
+import '../models/pregunta_model.dart';
 
 class AdminEncuestaEditorPage extends StatefulWidget {
   final String encuestaId;
@@ -491,8 +492,7 @@ class _AdminEncuestaEditorPageState extends State<AdminEncuestaEditorPage> {
                                           Wrap(
                                             spacing: 6,
                                             runSpacing: 4,
-                                            children: opciones
-                                                .split(',')
+                                            children: PreguntaOption.parseOptions(opciones)
                                                 .map(
                                                   (opt) => Container(
                                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -502,7 +502,7 @@ class _AdminEncuestaEditorPageState extends State<AdminEncuestaEditorPage> {
                                                       border: Border.all(color: Colors.grey[200]!),
                                                     ),
                                                     child: Text(
-                                                      opt.trim(),
+                                                      opt.label,
                                                       style: TextStyle(fontSize: 12, color: Colors.grey[700]),
                                                     ),
                                                   ),

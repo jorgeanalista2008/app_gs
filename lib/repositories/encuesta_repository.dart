@@ -54,7 +54,7 @@ class EncuestaRepository {
       final List<PreguntaModel> questions = preguntasData.map((p) {
         final opcionesStr = p['opciones']?.toString() ?? '';
         final responseOptions = opcionesStr.isNotEmpty
-            ? opcionesStr.split(',').map((o) => o.trim()).toList()
+            ? PreguntaOption.parseOptions(opcionesStr)
             : null;
             
         return PreguntaModel(
@@ -133,15 +133,29 @@ class EncuestaRepository {
     try {
       final arrayRespuestas = <Map<String, dynamic>>[];
       
+      // Obtener todas las preguntas de la base de datos para buscar descripción y tipo
+      final db = await _db.database;
+      final dbPreguntas = await db.query('preguntas');
+      final mapaPreguntas = {for (var p in dbPreguntas) p['id'].toString(): p};
+
       respuestas.forEach((preguntaId, valor) {
         if (valor == null || valor.toString().isEmpty) return;
         
+        final preguntaInfo = mapaPreguntas[preguntaId.toString()];
+        final descripcion = preguntaInfo?['descripcion']?.toString() ?? '';
+        final tipo = preguntaInfo?['tipo']?.toString() ?? '';
+
         final respuesta = <String, dynamic>{
           'visit_id': visitId,
           'question_id': preguntaId,
+          'question_description': descripcion,
+          'description': descripcion,
+          'question_type': tipo,
         };
         
-        if (valor is int) {
+        if (tipo == 'MULTIPLE_CHOICE') {
+          respuesta['answer_option'] = valor.toString();
+        } else if (valor is int) {
           respuesta['answer_option'] = valor.toString();
         } else {
           respuesta['answer_text'] = valor.toString();
@@ -163,6 +177,15 @@ class EncuestaRepository {
       );
 
       print('✅ Respuestas guardadas localmente (ID: $id)');
+      print('📡 === DETALLE DE RESPUESTAS GUARDADAS (DEBUG) ===');
+      try {
+        const encoder = JsonEncoder.withIndent('  ');
+        final prettyAnswers = encoder.convert(arrayRespuestas);
+        print('📦 Respuestas:\n$prettyAnswers');
+      } catch (_) {
+        print('📦 Respuestas (raw): $arrayRespuestas');
+      }
+      print('==================================================');
       return id > 0;
     } catch (e) {
       print('❌ Error guardando respuestas: $e');

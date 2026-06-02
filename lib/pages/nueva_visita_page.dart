@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../services/database_helper.dart';
+import '../models/pregunta_model.dart';
 import '../atoms/app_text_field.dart';
 
 class NuevaVisitaPage extends StatefulWidget {
@@ -105,8 +106,8 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
         'description': p['descripcion'],
         'question_type': p['tipo'],
         'is_required': p['es_requerida'] == 1,
-        'response_options': p['opciones']?.toString().isNotEmpty == true
-            ? p['opciones'].toString().split(',').map((o) => o.trim()).toList()
+        'response_options': p['opciones'] != null
+            ? PreguntaOption.parseOptions(p['opciones']).map((o) => o.toJson()).toList()
             : null,
         'sort_order': p['orden'],
         'order_index': p['orden'],
@@ -248,7 +249,35 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
                             ),
                           ),
                         ),
-                        title: Text(cliente['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        title: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                cliente['name'] ?? '',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (cliente['is_prospect'] == 1)
+                              Container(
+                                margin: const EdgeInsets.only(left: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.orange.shade300, width: 0.5),
+                                ),
+                                child: const Text(
+                                  'Prospecto',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.orange,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                         subtitle: Text('RIF: ${cliente['tax_id'] ?? 'N/A'}'),
                         trailing: isSelected
                             ? const Icon(Icons.check_circle, color: AppColors.primaryColor)
@@ -284,9 +313,37 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
                 const Icon(Icons.check_circle, color: AppColors.primaryColor, size: 20),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    'Cliente: ${_clienteSeleccionado!['name']}',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Cliente: ',
+                        style: TextStyle(color: Colors.grey, fontSize: 14),
+                      ),
+                      Expanded(
+                        child: Text(
+                          _clienteSeleccionado!['name'] ?? '',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (_clienteSeleccionado!['is_prospect'] == 1)
+                        Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'Prospecto',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 GestureDetector(
@@ -388,7 +445,11 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
               children: [
                 const Text('Resumen de la visita', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 const SizedBox(height: 12),
-                _buildResumenRow('Cliente', _clienteSeleccionado?['name'] ?? ''),
+                _buildResumenRow(
+                  'Cliente',
+                  _clienteSeleccionado?['name'] ?? '',
+                  isProspect: _clienteSeleccionado?['is_prospect'] == 1,
+                ),
                 _buildResumenRow('Encuesta', _encuestaSeleccionada?['titulo'] ?? ''),
               ],
             ),
@@ -498,14 +559,43 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
     );
   }
 
-  Widget _buildResumenRow(String label, String value) {
+  Widget _buildResumenRow(String label, String value, {bool isProspect = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(width: 70, child: Text('$label:', style: TextStyle(color: Colors.grey[600], fontSize: 13))),
-          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13))),
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    value,
+                    style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (isProspect)
+                  Container(
+                    margin: const EdgeInsets.only(left: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'Prospecto',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );

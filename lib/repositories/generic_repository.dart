@@ -41,9 +41,12 @@ class GenericRepository {
 
       final headers = await _getHeaders();
 
-      print('📋 GET List (API)');
+      print('📡 === DETALLE DE ENVÍO HTTP (DEBUG) ===');
+      print('🔄 Método: GET');
       print('🌐 URL: $url');
+      print('🔑 Headers: $headers');
       print('📂 NestedKey: ${nestedKey ?? "data"}');
+      print('========================================');
 
       final response = await http.get(
         url,
@@ -78,8 +81,11 @@ class GenericRepository {
       final url = Uri.parse('${Env.apiBaseUrl}$path');
       final headers = await _getHeaders();
 
-      print('🔍 GET ById (API)');
+      print('📡 === DETALLE DE ENVÍO HTTP (DEBUG) ===');
+      print('🔄 Método: GET');
       print('🌐 URL: $url');
+      print('🔑 Headers: $headers');
+      print('========================================');
 
       final response = await http.get(
         url,
@@ -112,9 +118,18 @@ class GenericRepository {
       final url = Uri.parse('${Env.apiBaseUrl}$path');
       final headers = await _getHeaders();
 
-      print('➕ POST (API)');
+      print('📡 === DETALLE DE ENVÍO HTTP (DEBUG) ===');
+      print('🔄 Método: POST');
       print('🌐 URL: $url');
-      print('📦 Body: $body');
+      print('🔑 Headers: $headers');
+      try {
+        const encoder = JsonEncoder.withIndent('  ');
+        final prettyJson = encoder.convert(body);
+        print('📦 Payload (JSON):\n$prettyJson');
+      } catch (_) {
+        print('📦 Payload (raw): $body');
+      }
+      print('========================================');
 
       final response = await http.post(
         url,
@@ -155,6 +170,24 @@ class GenericRepository {
     final headers = await _getHeaders();
     final encodedBody = payload == null ? null : jsonEncode(payload);
 
+    print('📡 === DETALLE DE ENVÍO HTTP (DEBUG) ===');
+    print('🔄 Método: ${method.toUpperCase()}');
+    print('🌐 URL: $url');
+    print('🔑 Headers: $headers');
+    if (payload != null) {
+      // Formatear payload de forma legible para la depuración
+      try {
+        const encoder = JsonEncoder.withIndent('  ');
+        final prettyJson = encoder.convert(payload);
+        print('📦 Payload (JSON):\n$prettyJson');
+      } catch (_) {
+        print('📦 Payload (raw): $payload');
+      }
+    } else {
+      print('📦 Payload: SIN CONTENIDO (NULL)');
+    }
+    print('========================================');
+
     http.Response response;
     switch (method.toUpperCase()) {
       case 'POST':
@@ -173,6 +206,7 @@ class GenericRepository {
         throw ArgumentError('Método HTTP no soportado: $method');
     }
 
+    print('📊 Status: ${response.statusCode}');
     return (statusCode: response.statusCode, body: response.body);
   }
 

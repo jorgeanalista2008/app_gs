@@ -11,7 +11,10 @@ import '../services/sync_service.dart';
 import '../services/auth_service.dart';
 import '../services/connectivity_service.dart';
 import 'nueva_visita_page.dart';
+import 'detalle_visita_page.dart';
 import 'dart:convert';
+import '../atoms/sync_status_chip.dart';
+import '../organisms/connection_wrapper.dart';
 
 class VisitasPage extends StatefulWidget {
   const VisitasPage({super.key});
@@ -281,10 +284,10 @@ class _VisitasPageState extends State<VisitasPage> with SingleTickerProviderStat
 
   void _onVisitaTapped(VisitaModel visita) async {
     if (visita.isCompletada) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Esta visita ya ha sido completada.'),
-          backgroundColor: Colors.orange,
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => DetalleVisitaPage(visita: visita),
         ),
       );
       return;
@@ -665,6 +668,10 @@ class _VisitasPageState extends State<VisitasPage> with SingleTickerProviderStat
           ],
         ),
         actions: [
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12.0, horizontal: 4.0),
+            child: SyncStatusChip(),
+          ),
           IconButton(
             icon: const Icon(Icons.cloud_download),
             tooltip: 'Descargar visitas asignadas',
@@ -713,35 +720,37 @@ class _VisitasPageState extends State<VisitasPage> with SingleTickerProviderStat
         icon: const Icon(Icons.add_task),
         label: const Text('Nueva Visita'),
       ),
-      body: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.white,
-            child: AppTextField(
-              controller: _searchController,
-              labelText: 'Buscar visita',
-              hintText: 'Cliente, RIF, código o ciudad...',
-              icon: Icons.search,
-              onSubmitted: (_) => _aplicarFiltro(),
-              onChanged: (_) => _aplicarFiltro(),
-            ),
-          ),
-          if (_searchController.text.isNotEmpty)
+      body: ConnectionWrapper(
+        child: Column(
+          children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: AppColors.primaryColor.withOpacity(0.05),
-              child: Row(
-                children: [
-                  Text(
-                    '${_visitasFiltradas.length} resultados encontrados',
-                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                  ),
-                ],
+              padding: const EdgeInsets.all(16),
+              color: Colors.white,
+              child: AppTextField(
+                controller: _searchController,
+                labelText: 'Buscar visita',
+                hintText: 'Cliente, RIF, código o ciudad...',
+                icon: Icons.search,
+                onSubmitted: (_) => _aplicarFiltro(),
+                onChanged: (_) => _aplicarFiltro(),
               ),
             ),
-          Expanded(child: _buildContent()),
-        ],
+            if (_searchController.text.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                color: AppColors.primaryColor.withOpacity(0.05),
+                child: Row(
+                  children: [
+                    Text(
+                      '${_visitasFiltradas.length} resultados encontrados',
+                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+            Expanded(child: _buildContent()),
+          ],
+        ),
       ),
     );
   }

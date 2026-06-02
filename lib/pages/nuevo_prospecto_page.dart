@@ -24,9 +24,6 @@ class _NuevoProspectoPageState extends State<NuevoProspectoPage> {
   final _direccionCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   final _contactNameCtrl = TextEditingController();
-  final _cityCtrl = TextEditingController();
-  final _zoneCodeCtrl = TextEditingController();
-
   double? _lat;
   double? _lng;
   bool _saving = false;
@@ -34,6 +31,68 @@ class _NuevoProspectoPageState extends State<NuevoProspectoPage> {
   DateTime? _nextFollowupDate;
   String? _photo1Base64;
   String? _photo2Base64;
+  String? _selectedZoneCode;
+  String? _selectedCity;
+
+  static const Map<String, List<String>> _ciudadesPorZona = {
+    "VE-AM": ["Puerto Ayacucho", "San Fernando de Atabapo", "Maroa", "San Carlos de Río Negro"],
+    "VE-AN": ["Barcelona", "Puerto La Cruz", "El Tigre", "Anaco", "Cantaura", "San José de Guanipa", "Guanta", "Clarines", "Aragua de Barcelona", "Pariaguán"],
+    "VE-AP": ["San Fernando de Apure", "Guasdualito", "Elorza", "Achaguas", "Biruaca", "San Juan de Payara"],
+    "VE-AR": ["Maracay", "Turmero", "La Victoria", "Cagua", "El Limón", "Villa de Cura", "Santa Cruz", "San Mateo", "Palo Negro", "Las Tejerías"],
+    "VE-BA": ["Barinas", "Socopó", "Barinitas", "Sabaneta", "Ciudad Bolivia", "Santa Bárbara de Barinas", "Obispos"],
+    "VE-BO": ["Ciudad Guayana (Puerto Ordaz)", "Ciudad Bolívar", "Upata", "Tumeremo", "Guasipati", "El Callao", "Caicara del Orinoco", "Santa Elena de Uairén"],
+    "VE-CA": ["Valencia", "Naguanagua", "San Diego", "Puerto Cabello", "Guacara", "Tocuyito", "San Joaquín", "Mariara", "Morón", "Bejuma", "Güigüe"],
+    "VE-CO": ["San Carlos", "Tinaquillo", "El Baúl", "Tinaco", "El Pao"],
+    "VE-DA": ["Tucupita", "Pedernales", "Curiapo"],
+    "VE-DC": ["Caracas", "El Junquito"],
+    "VE-FA": ["Punto Fijo", "Coro", "Chichiriviche", "Tucacas", "La Vela de Coro", "Dabajuro", "Santa Cruz de Bucaral", "Píritu"],
+    "VE-GU": ["San Juan de los Morros", "Valle de la Pascua", "Calabozo", "Altagracia de Orituco", "Zaraza", "El Socorro", "Camaguán"],
+    "VE-LG": ["Catia La Mar", "La Guaira", "Maiquetía", "Caraballeda", "Macuto", "Naiguatá", "Carayaca"],
+    "VE-LA": ["Barquisimeto", "Cabudare", "Carora", "El Tocuyo", "Quíbor", "Duaca", "Siquisique", "Sanare"],
+    "VE-ME": ["Mérida", "El Vigía", "Ejido", "Tovar", "Nueva Bolivia", "Mucuchíes", "Lagunillas", "Bailadores"],
+    "VE-MI": ["Los Teques", "Chacao", "Petare", "Baruta", "Guarenas", "Guatire", "Charallave", "Cúa", "Ocumare del Tuy", "Higuerote", "San Antonio de los Altos", "Río Chico", "Santa Teresa del Tuy", "Santa Lucía"],
+    "VE-MO": ["Maturín", "Punta de Mata", "Caripe", "Caripito", "Temblador", "Caicara de Maturín", "Aragua de Maturín"],
+    "VE-NE": ["Porlamar", "Pampatar", "La Asunción", "Juan Griego", "San Juan Bautista", "Punta de Piedras", "El Valle del Espíritu Santo"],
+    "VE-PO": ["Acarigua", "Araure", "Guanare", "Turén", "Villa Bruzual", "Boconó", "Ospino", "Chabasquén"],
+    "VE-SU": ["Cumaná", "Carúpano", "Güiria", "Cariaco", "El Pilar", "Río Caribe", "Araya"],
+    "VE-TA": ["San Cristóbal", "Táriba", "Rubio", "San Antonio del Táchira", "La Grita", "Michelena", "Ureña", "Colón", "Lobatera"],
+    "VE-TR": ["Valera", "Trujillo", "Boconó", "Sabana de Mendoza", "Carache", "Pampán", "Escuque", "La Puerta"],
+    "VE-YA": ["San Felipe", "Yaritagua", "Chivacoa", "Nirgua", "Cocorote", "Urachiche", "Bruzual"],
+    "VE-ZU": ["Maracaibo", "San Francisco", "Cabimas", "Ciudad Ojeda", "Machiques", "Santa Bárbara del Zulia", "La Villa del Rosario", "Lagunillas", "Bachaquero", "Mene Grande", "Puertos de Altagracia", "San Carlos del Zulia"],
+    "ZE": ["Ciudad Este", "Pueblo Este"],
+    "ZN": ["Ciudad Norte", "Pueblo Norte"],
+    "ZS": ["Ciudad Sur", "Pueblo Sur"],
+  };
+
+  final List<Map<String, String>> _zonas = const [
+    {"profit_code": "VE-AM", "description": "Amazonas"},
+    {"profit_code": "VE-AN", "description": "Anzoátegui"},
+    {"profit_code": "VE-AP", "description": "Apure"},
+    {"profit_code": "VE-AR", "description": "Aragua"},
+    {"profit_code": "VE-BA", "description": "Barinas"},
+    {"profit_code": "VE-BO", "description": "Bolívar"},
+    {"profit_code": "VE-CA", "description": "Carabobo"},
+    {"profit_code": "VE-CO", "description": "Cojedes"},
+    {"profit_code": "VE-DA", "description": "Delta Amacuro"},
+    {"profit_code": "VE-DC", "description": "Distrito Capital"},
+    {"profit_code": "VE-FA", "description": "Falcón"},
+    {"profit_code": "VE-GU", "description": "Guárico"},
+    {"profit_code": "VE-LG", "description": "La Guaira"},
+    {"profit_code": "VE-LA", "description": "Lara"},
+    {"profit_code": "VE-ME", "description": "Mérida"},
+    {"profit_code": "VE-MI", "description": "Miranda"},
+    {"profit_code": "VE-MO", "description": "Monagas"},
+    {"profit_code": "VE-NE", "description": "Nueva Esparta"},
+    {"profit_code": "VE-PO", "description": "Portuguesa"},
+    {"profit_code": "VE-SU", "description": "Sucre"},
+    {"profit_code": "VE-TA", "description": "Táchira"},
+    {"profit_code": "VE-TR", "description": "Trujillo"},
+    {"profit_code": "VE-YA", "description": "Yaracuy"},
+    {"profit_code": "VE-ZU", "description": "Zulia"},
+    {"profit_code": "ZE", "description": "[PRUEBA] Zona Este"},
+    {"profit_code": "ZN", "description": "[PRUEBA] Zona Norte"},
+    {"profit_code": "ZS", "description": "[PRUEBA] Zona Sur"}
+  ];
 
   @override
   void dispose() {
@@ -44,8 +103,6 @@ class _NuevoProspectoPageState extends State<NuevoProspectoPage> {
     _direccionCtrl.dispose();
     _notesCtrl.dispose();
     _contactNameCtrl.dispose();
-    _cityCtrl.dispose();
-    _zoneCodeCtrl.dispose();
     super.dispose();
   }
 
@@ -95,8 +152,8 @@ class _NuevoProspectoPageState extends State<NuevoProspectoPage> {
         lat: _lat,
         lng: _lng,
         contactName: _contactNameCtrl.text.trim(),
-        city: _cityCtrl.text.trim(),
-        zoneCode: _zoneCodeCtrl.text.trim(),
+        city: _selectedCity,
+        zoneCode: _selectedZoneCode,
         nextFollowupDate: _nextFollowupDate != null 
             ? "${_nextFollowupDate!.year}-${_nextFollowupDate!.month.toString().padLeft(2, '0')}-${_nextFollowupDate!.day.toString().padLeft(2, '0')}"
             : null,
@@ -170,18 +227,54 @@ class _NuevoProspectoPageState extends State<NuevoProspectoPage> {
                 keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 12),
-              AppTextField(
-                controller: _cityCtrl,
-                labelText: 'Ciudad',
-                hintText: 'Caracas, Maracaibo...',
-                icon: Icons.location_city,
+              DropdownButtonFormField<String>(
+                value: _selectedZoneCode,
+                decoration: const InputDecoration(
+                  labelText: 'Zona / Estado',
+                  prefixIcon: Icon(Icons.map),
+                ),
+                hint: const Text('Selecciona la zona del candidato'),
+                items: _zonas.map((zona) {
+                  return DropdownMenuItem<String>(
+                    value: zona['profit_code'],
+                    child: Text(zona['description']!),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _selectedZoneCode = value;
+                    _selectedCity = null;
+                  });
+                },
+                validator: (value) =>
+                    value == null ? 'Por favor selecciona la zona' : null,
               ),
               const SizedBox(height: 12),
-              AppTextField(
-                controller: _zoneCodeCtrl,
-                labelText: 'Código de Zona (ej: VE-MI)',
-                hintText: 'VE-MI',
-                icon: Icons.map,
+              DropdownButtonFormField<String>(
+                value: _selectedCity,
+                decoration: const InputDecoration(
+                  labelText: 'Ciudad',
+                  prefixIcon: Icon(Icons.location_city),
+                ),
+                hint: const Text('Selecciona la ciudad del candidato'),
+                disabledHint: const Text('Selecciona una zona/estado primero'),
+                items: _selectedZoneCode != null && _ciudadesPorZona.containsKey(_selectedZoneCode)
+                    ? _ciudadesPorZona[_selectedZoneCode]!.map((ciudad) {
+                        return DropdownMenuItem<String>(
+                          value: ciudad,
+                          child: Text(ciudad),
+                        );
+                      }).toList()
+                    : null,
+                onChanged: _selectedZoneCode != null
+                    ? (value) {
+                        setState(() {
+                          _selectedCity = value;
+                        });
+                      }
+                    : null,
+                validator: (value) =>
+                    _selectedZoneCode != null && value == null ? 'Por favor selecciona la ciudad' : null,
               ),
               const SizedBox(height: 12),
               AppTextField(

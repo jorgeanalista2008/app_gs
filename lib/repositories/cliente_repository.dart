@@ -221,13 +221,24 @@ class ClienteRepository {
     try {
       final url = Uri.parse('${Env.apiBaseUrl}/salesperson/auth/customers');
 
-      print('🌐 Obteniendo clientes desde API...');
-      print('📧 Email: $email');
+      final payload = {'email': email, 'password': password};
+      print('📡 === DETALLE DE ENVÍO HTTP (DEBUG) ===');
+      print('🔄 Método: POST');
+      print('🌐 URL: $url');
+      print('🔑 Headers: {"Content-Type": "application/json"}');
+      try {
+        const encoder = JsonEncoder.withIndent('  ');
+        final prettyJson = encoder.convert(payload);
+        print('📦 Payload (JSON):\n$prettyJson');
+      } catch (_) {
+        print('📦 Payload (raw): $payload');
+      }
+      print('========================================');
 
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email, 'password': password}),
+        body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 30));
 
       print('📊 Status: ${response.statusCode}');
@@ -318,6 +329,137 @@ class ClienteRepository {
       return guardados;
     } catch (e) {
       print('❌ Error sincronizando clientes: $e');
+      return 0;
+    }
+  }
+
+  /// Obtiene prospectos desde la API con email/password
+  Future<List<ClienteModel>> fetchProspectosFromApi({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final url = Uri.parse('${Env.apiBaseUrl}/salesperson/auth/prospects/list');
+
+      final payload = {
+        'email': email,
+        'password': password,
+        'page': 1,
+        'limit': 200,
+      };
+      print('📡 === DETALLE DE ENVÍO HTTP (DEBUG) ===');
+      print('🔄 Método: POST');
+      print('🌐 URL: $url');
+      print('🔑 Headers: {"Content-Type": "application/json"}');
+      try {
+        const encoder = JsonEncoder.withIndent('  ');
+        final prettyJson = encoder.convert(payload);
+        print('📦 Payload (JSON):\n$prettyJson');
+      } catch (_) {
+        print('📦 Payload (raw): $payload');
+      }
+      print('========================================');
+
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 30));
+
+      print('📊 Status prospectos: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> decoded = jsonDecode(response.body);
+        final List<dynamic> data = decoded['data'] ?? [];
+        final prospectos = data.map((json) => ClienteModel.fromJson(json)).toList();
+        print('✅ ${prospectos.length} prospectos obtenidos de API');
+        return prospectos;
+      }
+      return [];
+    } catch (e) {
+      print('❌ Error obteniendo prospectos: $e');
+      return [];
+    }
+  }
+
+  /// Descarga prospectos de la API y los guarda en SQLite
+  Future<int> sincronizarProspectos({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final prospectos = await fetchProspectosFromApi(email: email, password: password);
+      if (prospectos.isEmpty) return 0;
+
+      final db = await _db.database;
+      int guardados = 0;
+
+      for (var prospecto in prospectos) {
+        // Buscar si ya existe localmente por id (o server_id si ya se subió)
+        List<Map<String, dynamic>> existente = await db.query(
+          'clientes',
+          where: 'id = ? OR server_id = ?',
+          whereArgs: [prospecto.id, prospecto.id],
+          limit: 1,
+        );
+
+        if (existente.isEmpty && prospecto.taxId.isNotEmpty) {
+          existente = await db.query(
+            'clientes',
+            where: 'tax_id = ? AND is_prospect = 1',
+            whereArgs: [prospecto.taxId],
+            limit: 1,
+          );
+        }
+
+        if (existente.isNotEmpty) {
+          final localSynced = (existente.first['sincronizado'] as int?) ?? 1;
+          if (localSynced == 0) {
+            // Conservar versión local pendiente de envío
+            continue;
+          }
+        }
+
+        final row = {
+          'name': prospecto.name,
+          'tax_id': prospecto.taxId,
+          'telefono': prospecto.telefono,
+          'email': prospecto.email,
+          'direccion': prospecto.direccion,
+          'notes': prospecto.notes,
+          'contact_name': prospecto.contactName,
+          'city': prospecto.city,
+          'zone_code': prospecto.zoneCode,
+          'next_followup_date': prospecto.nextFollowupDate,
+          'sincronizado': 1, // Ya está en el servidor
+          'is_prospect': 1,
+          'fecha_sync': DateTime.now().toIso8601String(),
+        };
+
+        if (existente.isEmpty) {
+          // Es un prospecto nuevo del servidor, lo insertamos usando el id del servidor
+          row['id'] = prospecto.id;
+          row['server_id'] = prospecto.id;
+          await db.insert('clientes', row);
+          guardados++;
+        } else {
+          // Existe localmente, actualizamos
+          final localId = existente.first['id'] as String;
+          row['server_id'] = prospecto.id;
+          await db.update(
+            'clientes',
+            row,
+            where: 'id = ?',
+            whereArgs: [localId],
+          );
+          guardados++;
+        }
+      }
+
+      print('✅ Sincronización de prospectos completada ($guardados guardados/actualizados)');
+      return guardados;
+    } catch (e) {
+      print('❌ Error sincronizando prospectos: $e');
       return 0;
     }
   }

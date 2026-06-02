@@ -364,9 +364,9 @@ class _EncuestaPageState extends State<EncuestaPage> {
 
     return Column(
       children: (pregunta.responseOptions ?? []).map((opcion) {
-        final isSelected = seleccionada == opcion;
+        final isSelected = seleccionada == opcion.id;
         return GestureDetector(
-          onTap: () => setState(() => _respuestas[pregunta.id] = opcion),
+          onTap: () => setState(() => _respuestas[pregunta.id] = opcion.id),
           child: Container(
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -383,7 +383,7 @@ class _EncuestaPageState extends State<EncuestaPage> {
                   color: isSelected ? AppColors.primaryColor : Colors.grey[400],
                 ),
                 const SizedBox(width: 10),
-                Expanded(child: Text(opcion, style: TextStyle(fontSize: 14, color: isSelected ? AppColors.primaryColor : Colors.grey[700]))),
+                Expanded(child: Text(opcion.label, style: TextStyle(fontSize: 14, color: isSelected ? AppColors.primaryColor : Colors.grey[700]))),
               ],
             ),
           ),

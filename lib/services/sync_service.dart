@@ -235,22 +235,13 @@ class SyncService {
           final tipo = pregunta['question_type']?.toString() ?? 'TEXT';
           final esRequerida = (pregunta['is_required'] == true || pregunta['is_required'] == 1) ? 1 : 0;
           
-          String? opcionesCSV;
+          String? opcionesStr;
           final opts = pregunta['response_options'];
           if (opts != null) {
-            try {
-              if (opts is String && opts.isNotEmpty) {
-                final parsed = jsonDecode(opts);
-                if (parsed is List) {
-                  opcionesCSV = parsed.join(', ');
-                } else {
-                  opcionesCSV = opts;
-                }
-              } else if (opts is List) {
-                opcionesCSV = opts.join(', ');
-              }
-            } catch (_) {
-              opcionesCSV = opts.toString();
+            if (opts is String) {
+              opcionesStr = opts;
+            } else {
+              opcionesStr = jsonEncode(opts);
             }
           }
 
@@ -262,7 +253,7 @@ class SyncService {
             descripcion: descripcion,
             tipo: tipo,
             esRequerida: esRequerida,
-            opciones: opcionesCSV,
+            opciones: opcionesStr,
             orden: orden,
           );
         }
@@ -302,7 +293,36 @@ class SyncService {
       }
 
       final db = await _db.database;
+
+      // Obtener credenciales para el envío a los nuevos endpoints públicos
+      String? username = email;
+      String? pass = password;
+
+      if (username == null || pass == null) {
+        final userId = AuthService.instance.userId;
+        if (userId != null) {
+          final userLocal = await _db.getUsuario(userId);
+          if (userLocal != null) {
+            username = userLocal['username'];
+            pass = userLocal['password'];
+          }
+        }
+      }
+
+      if (username == null || pass == null) {
+        print('❌ No hay credenciales para sincronizar');
+        return {'marcadas': 0, 'errores': 1};
+      }
       
+      // Auto-reparar cualquier visita completada que tenga respuestas pendientes de sincronización
+      await db.rawUpdate('''
+        UPDATE visitas 
+        SET sincronizado = 0 
+        WHERE status = 'COMPLETED' 
+          AND sincronizado = 1
+          AND id IN (SELECT DISTINCT visit_id FROM respuestas_pendientes WHERE sincronizado = 0)
+      ''');
+
       // Obtener visitas completadas localmente y que no estén sincronizadas
       final completedVisits = await db.query(
         'visitas',
@@ -332,22 +352,29 @@ class SyncService {
           final respuestaRow = respuestas.first;
           final answersList = jsonDecode(respuestaRow['respuestas_json'] as String) as List;
 
-          // 1. Crear la visita en el backend
-          final visitBody = {
-            'customer_id': int.tryParse(visitRow['customer_id']?.toString() ?? '') ?? visitRow['customer_id'],
-            'notes': visitRow['notes'] ?? '',
-            'priority': visitRow['priority'] ?? 3,
-            'visit_date_from': visitRow['visit_date_from'],
-            'visit_date_to': visitRow['visit_date_to'],
+          // 1. Crear el registro de visita en el backend
+          final scheduleId = int.tryParse(visitId);
+          final visitDate = visitRow['visit_date_from']?.toString() ?? 
+                            (respuestaRow['fecha_creacion']?.toString().substring(0, 10)) ?? 
+                            DateTime.now().toIso8601String().substring(0, 10);
+
+          final visitBody = <String, dynamic>{
+            'email': username,
+            'password': pass,
+            'customer_id': visitRow['customer_id'],
+            'visit_date': visitDate,
+            if (scheduleId != null) 'visit_schedule_id': scheduleId,
             'latitude': respuestaRow['lat'],
             'longitude': respuestaRow['lng'],
+            'description': visitRow['notes'] ?? '',
             'photo_1': respuestaRow['foto1_path'],
             'photo_2': respuestaRow['foto2_path'],
+            'extra_data': {},
           };
 
           print('📤 Creando visita en backend para cliente ${visitRow['customer_name']}...');
           final visitResponse = await GenericRepository.instance.postOnline<Map<String, dynamic>>(
-            path: '/salesperson/me/visits',
+            path: '/salesperson/auth/visits',
             body: visitBody,
             fromJson: (json) => json,
           );
@@ -361,41 +388,64 @@ class SyncService {
             throw Exception('No se recibió un ID de visita válido desde el servidor: $visitResponse');
           }
 
-          print('✅ Visita creada en backend con ID: $backendVisitId. Subiendo respuestas una a una...');
+          final parsedVisitId = int.tryParse(backendVisitId.toString()) ?? backendVisitId;
 
-          // 2. Subir respuestas individualmente
-          bool todasRespuestasSincronizadas = true;
-          for (var answerItem in answersList) {
-            final answerBody = {
-              'visit_id': int.tryParse(backendVisitId.toString()) ?? backendVisitId,
-              'question_id': int.tryParse(answerItem['question_id']?.toString() ?? '') ?? answerItem['question_id'],
-              if (answerItem.containsKey('answer_option')) 'answer_option': answerItem['answer_option'],
-              if (answerItem.containsKey('answer_text')) 'answer_text': answerItem['answer_text'],
+          // 2. Enviar las respuestas de la encuesta una a una
+          for (var item in answersList) {
+            final qId = int.tryParse(item['question_id']?.toString() ?? '') ?? 0;
+            final answerText = item['answer_text']?.toString() ?? '';
+            final answerOption = item['answer_option']?.toString() ?? '';
+            final notes = visitRow['notes']?.toString() ?? '';
+
+            final answerBody = <String, dynamic>{
+              'email': username,
+              'password': pass,
+              'visit_id': parsedVisitId,
+              'question_id': qId,
+              'answer_text': answerText,
+              'answer_option': answerOption,
+              'notes': notes,
             };
 
-            print('📤 Subiendo respuesta para pregunta ${answerItem['question_id']}...');
+            print('📤 Registrando respuesta para pregunta $qId (Visita $parsedVisitId)...');
             final answerResponse = await GenericRepository.instance.postOnline<Map<String, dynamic>>(
-              path: '/salesperson/me/answers',
+              path: '/salesperson/auth/answers',
               body: answerBody,
               fromJson: (json) => json,
             );
 
             if (answerResponse == null) {
-              todasRespuestasSincronizadas = false;
-              print('❌ Error al subir respuesta: $answerBody');
+              throw Exception('El servidor rechazó registrar la respuesta para la pregunta $qId');
             }
           }
 
-          if (todasRespuestasSincronizadas) {
-            // Marcar localmente como sincronizado
-            await _db.marcarRespuestaSincronizada(respuestaRow['id'] as int);
-            await _db.marcarVisitaSincronizada(visitId);
-            marcadas++;
-            print('✅ Sincronización exitosa para la visita $visitId');
-          } else {
-            errores++;
-            print('⚠️ Algunas respuestas no se pudieron sincronizar para la visita $visitId');
+          // 3. Completar visita programada en backend si correspondía a un schedule (id numérico)
+          if (scheduleId != null) {
+            print('📤 Completando visita programada $scheduleId en backend via POST...');
+            final completeBody = <String, dynamic>{
+              'email': username,
+              'password': pass,
+              'status': 'COMPLETED',
+              'notes': visitRow['notes'] ?? '',
+              'visit_record_id': parsedVisitId,
+            };
+
+            final completeResponse = await GenericRepository.instance.postOnline<Map<String, dynamic>>(
+              path: '/salesperson/auth/schedules/$scheduleId/complete',
+              body: completeBody,
+              fromJson: (json) => json,
+            );
+
+            if (completeResponse == null) {
+              throw Exception('El servidor rechazó completar la agenda programada $scheduleId.');
+            }
           }
+
+          // Marcar localmente como sincronizado
+          await _db.marcarRespuestaSincronizada(respuestaRow['id'] as int);
+          await _db.marcarVisitaSincronizada(visitId);
+          marcadas++;
+          print('✅ Sincronización unificada exitosa para la visita $visitId');
         } catch (e) {
           errores++;
           print('❌ Error sincronizando visita $visitId: $e');
