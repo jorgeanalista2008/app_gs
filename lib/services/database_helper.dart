@@ -20,7 +20,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 8,
+      version: 9,
       onCreate: (db, version) async {
         await _createTables(db);
       },
@@ -70,6 +70,9 @@ class DatabaseHelper {
         if (oldVersion < 8) {
           await _addProspectPhotosAndExtraFields(db);
         }
+        if (oldVersion < 9) {
+          await _addUserIdentifiers(db);
+        }
       },
     );
   }
@@ -86,7 +89,10 @@ class DatabaseHelper {
       full_name TEXT,
       role TEXT DEFAULT 'vendedor',
       activo INTEGER DEFAULT 1,
-      fecha_creacion TEXT
+      fecha_creacion TEXT,
+      tenant_id TEXT,
+      company_id TEXT,
+      branch_id TEXT
     )
   ''');
 
@@ -262,6 +268,21 @@ class DatabaseHelper {
       try {
         await db.execute(
             'ALTER TABLE clientes ADD COLUMN ${entry.key} ${entry.value}');
+      } catch (_) {}
+    }
+  }
+
+  /// Migración v8→v9: columnas para tenant_id, company_id y branch_id en usuarios.
+  Future<void> _addUserIdentifiers(Database db) async {
+    const cols = {
+      'tenant_id': 'TEXT',
+      'company_id': 'TEXT',
+      'branch_id': 'TEXT',
+    };
+    for (final entry in cols.entries) {
+      try {
+        await db.execute(
+            'ALTER TABLE usuarios ADD COLUMN ${entry.key} ${entry.value}');
       } catch (_) {}
     }
   }
@@ -693,22 +714,42 @@ class DatabaseHelper {
         'role': 'admin',
         'activo': 1,
         'fecha_creacion': DateTime.now().toIso8601String(),
+        'tenant_id': 'A1000000-0000-0000-0000-000000000001',
+        'company_id': 'A1000000-0000-0000-0000-000000000001',
+        'branch_id': 'E8CCCF7B-F658-4FC4-B348-28EDCB8E229B',
       });
       print('✅ Usuario maestro creado');
+    } else {
+      await db.update('usuarios', {
+        'tenant_id': 'A1000000-0000-0000-0000-000000000001',
+        'company_id': 'A1000000-0000-0000-0000-000000000001',
+        'branch_id': 'E8CCCF7B-F658-4FC4-B348-28EDCB8E229B',
+      }, where: 'username = ?', whereArgs: ['admin']);
     }
 
     final vendedorExistente = await db.query('usuarios', where: 'username = ?', whereArgs: ['vendedor@solsumed.com']);
     if (vendedorExistente.isEmpty) {
       await db.insert('usuarios', {
-        'id': 'vendedor-001',
+        'id': '425CFE2C-0C0E-4199-9618-00E7BC6860B2',
         'username': 'vendedor@solsumed.com',
         'password': '123456',
         'full_name': 'Vendedor Principal',
         'role': 'vendedor',
         'activo': 1,
         'fecha_creacion': DateTime.now().toIso8601String(),
+        'tenant_id': 'A1000000-0000-0000-0000-000000000001',
+        'company_id': 'A1000000-0000-0000-0000-000000000001',
+        'branch_id': 'E8CCCF7B-F658-4FC4-B348-28EDCB8E229B',
       });
       print('✅ Usuario vendedor creado');
+    } else {
+      await db.update('usuarios', {
+        'id': '425CFE2C-0C0E-4199-9618-00E7BC6860B2',
+        'tenant_id': 'A1000000-0000-0000-0000-000000000001',
+        'company_id': 'A1000000-0000-0000-0000-000000000001',
+        'branch_id': 'E8CCCF7B-F658-4FC4-B348-28EDCB8E229B',
+      }, where: 'username = ?', whereArgs: ['vendedor@solsumed.com']);
+      print('✅ Usuario vendedor actualizado con nuevos campos');
     }
 
   
@@ -732,6 +773,9 @@ class DatabaseHelper {
     required String password,
     required String fullName,
     String role = 'vendedor',
+    String? tenantId,
+    String? companyId,
+    String? branchId,
   }) async {
     final db = await database;
     final userId = 'usr_${DateTime.now().microsecondsSinceEpoch}';
@@ -743,7 +787,46 @@ class DatabaseHelper {
       'role': role,
       'activo': 1,
       'fecha_creacion': DateTime.now().toIso8601String(),
+      'tenant_id': tenantId,
+      'company_id': companyId,
+      'branch_id': branchId,
     });
+  }
+
+  /// Guarda o actualiza los datos de un usuario tras login online exitoso.
+  Future<void> guardarOActualizarUsuario({
+    required String id,
+    required String username,
+    required String password,
+    required String fullName,
+    required String role,
+    String? tenantId,
+    String? companyId,
+    String? branchId,
+  }) async {
+    final db = await database;
+    final existente = await db.query('usuarios', where: 'id = ?', whereArgs: [id]);
+    final userData = {
+      'id': id,
+      'username': username,
+      'password': password,
+      'full_name': fullName,
+      'role': role,
+      'activo': 1,
+      'tenant_id': tenantId,
+      'company_id': companyId,
+      'branch_id': branchId,
+    };
+    if (existente.isEmpty) {
+      await db.insert('usuarios', {
+        ...userData,
+        'fecha_creacion': DateTime.now().toIso8601String(),
+      });
+      print('💾 Nuevo usuario $username guardado en SQLite local');
+    } else {
+      await db.update('usuarios', userData, where: 'id = ?', whereArgs: [id]);
+      print('💾 Usuario $username actualizado en SQLite local');
+    }
   }
 
   /// Obtiene todos los usuarios

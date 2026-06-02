@@ -176,6 +176,9 @@ class _AdminPanelPageState extends State<AdminPanelPage> with SingleTickerProvid
     final nameController = TextEditingController();
     final usernameController = TextEditingController();
     final passwordController = TextEditingController();
+    final tenantIdController = TextEditingController(text: 'A1000000-0000-0000-0000-000000000001');
+    final companyIdController = TextEditingController(text: 'A1000000-0000-0000-0000-000000000001');
+    final branchIdController = TextEditingController(text: 'E8CCCF7B-F658-4FC4-B348-28EDCB8E229B');
     String selectedRole = 'vendedor';
 
     showDialog(
@@ -266,6 +269,51 @@ class _AdminPanelPageState extends State<AdminPanelPage> with SingleTickerProvid
                           }
                         },
                       ),
+                      const SizedBox(height: 15),
+                      TextFormField(
+                        controller: tenantIdController,
+                        decoration: const InputDecoration(
+                          labelText: 'Tenant ID (UUID)',
+                          prefixIcon: Icon(Icons.business),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Por favor ingresa el Tenant ID';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 15),
+                      TextFormField(
+                        controller: companyIdController,
+                        decoration: const InputDecoration(
+                          labelText: 'Company ID (UUID)',
+                          prefixIcon: Icon(Icons.location_city_outlined),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Por favor ingresa el Company ID';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 15),
+                      TextFormField(
+                        controller: branchIdController,
+                        decoration: const InputDecoration(
+                          labelText: 'Branch ID (UUID)',
+                          prefixIcon: Icon(Icons.storefront_outlined),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Por favor ingresa el Branch ID';
+                          }
+                          return null;
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -284,6 +332,9 @@ class _AdminPanelPageState extends State<AdminPanelPage> with SingleTickerProvid
                           password: passwordController.text,
                           fullName: nameController.text.trim(),
                           role: selectedRole,
+                          tenantId: tenantIdController.text.trim(),
+                          companyId: companyIdController.text.trim(),
+                          branchId: branchIdController.text.trim(),
                         );
                         if (context.mounted) {
                           Navigator.pop(context);
@@ -534,6 +585,27 @@ class _AdminPanelPageState extends State<AdminPanelPage> with SingleTickerProvid
                           fontSize: 14,
                         ),
                       ),
+                      if (user['tenant_id'] != null && user['tenant_id'].toString().isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          'Tenant: ${user['tenant_id']}',
+                          style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                        ),
+                      ],
+                      if (user['company_id'] != null && user['company_id'].toString().isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          'Company: ${user['company_id']}',
+                          style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                        ),
+                      ],
+                      if (user['branch_id'] != null && user['branch_id'].toString().isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          'Branch: ${user['branch_id']}',
+                          style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                        ),
+                      ],
                       const SizedBox(height: 4),
                       Text(
                         'Creado: $formatedDate',
