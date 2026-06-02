@@ -76,15 +76,14 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
 
     try {
       final now = DateTime.now();
-      final visitaId = 'visita_${now.microsecondsSinceEpoch}';
       final yearStr = now.year.toString();
       final monthStr = now.month.toString().padLeft(2, '0');
       final dayStr = now.day.toString().padLeft(2, '0');
       final lastDay = DateTime(now.year, now.month + 1, 0).day.toString().padLeft(2, '0');
 
       final db = await _db.database;
-      await db.insert('visitas', {
-        'id': visitaId,
+      
+      final visitData = {
         'customer_id': _clienteSeleccionado!['id'],
         'customer_name': _clienteSeleccionado!['name'],
         'address': _clienteSeleccionado!['direccion'] ?? '',
@@ -97,7 +96,36 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
         'priority': _prioridad,
         'status': 'PENDING',
         'sincronizado': 0,
-      });
+      };
+
+      // Buscar si el cliente ya tiene una visita programada (pendiente) en local
+      final List<Map<String, dynamic>> visitasPendientes = await db.query(
+        'visitas',
+        where: "customer_id = ? AND status = 'PENDING'",
+        whereArgs: [_clienteSeleccionado!['id']],
+        limit: 1,
+      );
+
+      String visitaId;
+      if (visitasPendientes.isNotEmpty) {
+        // Si ya hay una agenda programada pendiente, la actualizamos para reutilizar su ID numérico
+        visitaId = visitasPendientes.first['id'].toString();
+        await db.update(
+          'visitas',
+          visitData,
+          where: 'id = ?',
+          whereArgs: [visitaId],
+        );
+        print('🔗 Vinculando visita manual a la agenda programada existente ID: $visitaId');
+      } else {
+        // De lo contrario, creamos una visita ad-hoc nueva
+        visitaId = 'visita_${now.microsecondsSinceEpoch}';
+        await db.insert('visitas', {
+          'id': visitaId,
+          ...visitData,
+        });
+        print('🆕 Creada visita manual ad-hoc con ID: $visitaId');
+      }
 
       // Guardar preguntas asociadas
       final preguntas = await _db.getPreguntasByEncuestaId(_encuestaSeleccionada!['id']);

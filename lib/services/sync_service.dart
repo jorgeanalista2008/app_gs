@@ -353,7 +353,7 @@ class SyncService {
           final answersList = jsonDecode(respuestaRow['respuestas_json'] as String) as List;
 
           // 1. Crear el registro de visita en el backend
-          final scheduleId = int.tryParse(visitId);
+          final scheduleId = int.tryParse(visitId) ?? (double.tryParse(visitId)?.toInt());
           final visitDate = visitRow['visit_date_from']?.toString() ?? 
                             (respuestaRow['fecha_creacion']?.toString().substring(0, 10)) ?? 
                             DateTime.now().toIso8601String().substring(0, 10);
@@ -372,6 +372,7 @@ class SyncService {
             'extra_data': {},
           };
 
+          print('🔍 Sincronizando visita - ID local: $visitId, parsed scheduleId: $scheduleId');
           print('📤 Creando visita en backend para cliente ${visitRow['customer_name']}...');
           final visitResponse = await GenericRepository.instance.postOnline<Map<String, dynamic>>(
             path: '/salesperson/auth/visits',
@@ -388,7 +389,9 @@ class SyncService {
             throw Exception('No se recibió un ID de visita válido desde el servidor: $visitResponse');
           }
 
-          final parsedVisitId = int.tryParse(backendVisitId.toString()) ?? backendVisitId;
+          final parsedVisitId = int.tryParse(backendVisitId.toString()) ?? 
+                                (double.tryParse(backendVisitId.toString())?.toInt()) ?? 
+                                backendVisitId;
 
           // 2. Enviar las respuestas de la encuesta una a una
           for (var item in answersList) {
