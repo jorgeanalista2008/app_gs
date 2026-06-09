@@ -26,14 +26,14 @@ class StatCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.cardColor,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
         ),
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             CircleAvatar(
-              backgroundColor: iconColor.withOpacity(0.2),
+              backgroundColor: iconColor.withValues(alpha: 0.2),
               child: Icon(icon, color: iconColor, size: 30),
             ),
             const SizedBox(height: 15),

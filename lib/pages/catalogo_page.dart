@@ -222,7 +222,7 @@ class _CatalogoPageState extends State<CatalogoPage> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: bialyColor.withOpacity(0.15),
+                      color: bialyColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -276,7 +276,7 @@ class _CatalogoPageState extends State<CatalogoPage> {
             borderRadius: BorderRadius.circular(14),
             gradient: esBialy
                 ? LinearGradient(
-                    colors: [bialyColor.withOpacity(0.05), Colors.white],
+                    colors: [bialyColor.withValues(alpha: 0.05), Colors.white],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                   )
@@ -294,9 +294,9 @@ class _CatalogoPageState extends State<CatalogoPage> {
                     height: 90,
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: AppColors.primaryColor.withOpacity(0.05),
+                      color: AppColors.primaryColor.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: esBialy ? bialyColor.withOpacity(0.3) : Colors.transparent),
+                      border: Border.all(color: esBialy ? bialyColor.withValues(alpha: 0.3) : Colors.transparent),
                     ),
                     child: Stack(
                       children: [
@@ -322,12 +322,12 @@ class _CatalogoPageState extends State<CatalogoPage> {
                                   },
                                   errorBuilder: (context, error, stackTrace) {
                                     return Center(
-                                      child: Icon(Icons.inventory_2, color: AppColors.primaryColor.withOpacity(0.3), size: 50),
+                                      child: Icon(Icons.inventory_2, color: AppColors.primaryColor.withValues(alpha: 0.3), size: 50),
                                     );
                                   },
                                 )
                               : Center(
-                                  child: Icon(Icons.inventory_2, color: AppColors.primaryColor.withOpacity(0.3), size: 50),
+                                  child: Icon(Icons.inventory_2, color: AppColors.primaryColor.withValues(alpha: 0.3), size: 50),
                                 ),
                         ),
 
@@ -356,7 +356,7 @@ class _CatalogoPageState extends State<CatalogoPage> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                             decoration: BoxDecoration(
-                              color: producto.tieneStock ? Colors.green.withOpacity(0.8) : Colors.red.withOpacity(0.8),
+                              color: producto.tieneStock ? Colors.green.withValues(alpha: 0.8) : Colors.red.withValues(alpha: 0.8),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -380,8 +380,8 @@ class _CatalogoPageState extends State<CatalogoPage> {
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: producto.tieneStock
-                                      ? Colors.green.withOpacity(0.9)
-                                      : Colors.red.withOpacity(0.9),
+                                      ? Colors.green.withValues(alpha: 0.9)
+                                      : Colors.red.withValues(alpha: 0.9),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Row(
@@ -441,7 +441,7 @@ class _CatalogoPageState extends State<CatalogoPage> {
                   margin: const EdgeInsets.only(bottom: 4),
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: esBialy ? bialyColor.withOpacity(0.1) : Colors.blue.withOpacity(0.08),
+                    color: esBialy ? bialyColor.withValues(alpha: 0.1) : Colors.blue.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
@@ -481,13 +481,13 @@ class _CatalogoPageState extends State<CatalogoPage> {
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: producto.tieneStock
-                          ? Colors.green.withOpacity(0.1)
-                          : Colors.red.withOpacity(0.1),
+                          ? Colors.green.withValues(alpha: 0.1)
+                          : Colors.red.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: producto.tieneStock
-                            ? Colors.green.withOpacity(0.3)
-                            : Colors.red.withOpacity(0.3),
+                            ? Colors.green.withValues(alpha: 0.3)
+                            : Colors.red.withValues(alpha: 0.3),
                       ),
                     ),
                     child: Row(
@@ -636,7 +636,7 @@ class _CatalogoPageState extends State<CatalogoPage> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(
-                          color: AppColors.primaryColor.withOpacity(0.08),
+                          color: AppColors.primaryColor.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -653,7 +653,7 @@ class _CatalogoPageState extends State<CatalogoPage> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
-                            color: esBialy ? bialyColor.withOpacity(0.08) : Colors.grey[100],
+                            color: esBialy ? bialyColor.withValues(alpha: 0.08) : Colors.grey[100],
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -730,7 +730,7 @@ class _CatalogoPageState extends State<CatalogoPage> {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: AppColors.primaryColor.withOpacity(0.06),
+              color: AppColors.primaryColor.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, size: 16, color: AppColors.primaryColor),
@@ -761,7 +761,7 @@ class _CatalogoPageState extends State<CatalogoPage> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.primaryColor.withOpacity(0.05),
+        color: AppColors.primaryColor.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(

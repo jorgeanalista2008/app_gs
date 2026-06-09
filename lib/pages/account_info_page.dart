@@ -211,7 +211,7 @@ class _AccountInfoPageState extends State<AccountInfoPage> {
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: 4),
                         boxShadow: [
-                          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, spreadRadius: 1),
+                          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, spreadRadius: 1),
                         ],
                       ),
                       child: AvatarWidget(
@@ -323,7 +323,7 @@ class _AccountInfoPageState extends State<AccountInfoPage> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey[100]!),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.01), blurRadius: 10, offset: const Offset(0, 4)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.01), blurRadius: 10, offset: const Offset(0, 4)),
         ],
       ),
       child: Column(

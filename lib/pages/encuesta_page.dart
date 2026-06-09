@@ -230,7 +230,7 @@ class _EncuestaPageState extends State<EncuestaPage> {
         children: [
           CircleAvatar(
             radius: 28,
-            backgroundColor: AppColors.primaryColor.withOpacity(0.1),
+            backgroundColor: AppColors.primaryColor.withValues(alpha: 0.1),
             child: Text(
               visita.customerName.isNotEmpty ? visita.customerName[0].toUpperCase() : '?',
               style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.primaryColor),
@@ -257,7 +257,7 @@ class _EncuestaPageState extends State<EncuestaPage> {
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+            decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
             child: const Text('Pendiente', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.orange)),
           ),
         ],
@@ -282,7 +282,7 @@ class _EncuestaPageState extends State<EncuestaPage> {
           children: [
             Container(
               width: 34, height: 34,
-              decoration: BoxDecoration(color: Colors.orange.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
               child: const Icon(Icons.quiz, color: Colors.orange, size: 18),
             ),
             const SizedBox(width: 10),
@@ -371,7 +371,7 @@ class _EncuestaPageState extends State<EncuestaPage> {
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: isSelected ? AppColors.primaryColor.withOpacity(0.08) : Colors.grey[50],
+              color: isSelected ? AppColors.primaryColor.withValues(alpha: 0.08) : Colors.grey[50],
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: isSelected ? AppColors.primaryColor : Colors.grey[200]!),
             ),
@@ -401,7 +401,7 @@ class _EncuestaPageState extends State<EncuestaPage> {
           children: [
             Container(
               width: 34, height: 34,
-              decoration: BoxDecoration(color: AppColors.primaryColor.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(color: AppColors.primaryColor.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
               child: const Icon(Icons.camera_alt, color: AppColors.primaryColor, size: 18),
             ),
             const SizedBox(width: 10),

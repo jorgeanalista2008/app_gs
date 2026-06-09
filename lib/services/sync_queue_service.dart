@@ -30,6 +30,10 @@ class SyncQueueService {
   bool _draining = false;
   bool _reauthTriedThisDrain = false;
 
+  final StreamController<bool> _syncingController = StreamController<bool>.broadcast();
+  Stream<bool> get syncingStream => _syncingController.stream;
+  bool get isDraining => _draining;
+
   /// Callbacks ejecutados tras éxito de push.
   /// Firma: `(operationRow, responseBody) => Future<void>`.
   /// Keyed por `entity_type` para que cada repositorio sólo reciba sus eventos.
@@ -92,13 +96,13 @@ class SyncQueueService {
           result == ConnectivityResult.wifi ||
           result == ConnectivityResult.ethernet;
       if (online) {
-        print('🔄 [SyncQueue] red recuperada → drain');
-        drain();
+        print('🔄 [SyncQueue] red recuperada → ejecutarSincronizacionCompleta');
+        SyncService.instance.ejecutarSincronizacionCompleta();
       }
     });
-    _periodicTimer ??= Timer.periodic(_periodicInterval, (_) => drain());
-    // Drain inicial al arrancar (si hay red).
-    drain();
+    _periodicTimer ??= Timer.periodic(_periodicInterval, (_) => SyncService.instance.intentarSubirDatos());
+    // Sincronización inicial al arrancar (si hay red).
+    SyncService.instance.ejecutarSincronizacionCompleta();
   }
 
   void stop() {
@@ -109,13 +113,14 @@ class SyncQueueService {
   }
 
   /// Drena operaciones pendientes listas para reintento.
-  Future<void> drain() async {
+  Future<void> drain({bool force = false}) async {
     if (_draining) return;
-    if (!await _connectivity.isConnected()) {
+    if (!force && !await _connectivity.isConnected()) {
       print('📴 [SyncQueue] offline, skip drain');
       return;
     }
     _draining = true;
+    _syncingController.add(true);
     _reauthTriedThisDrain = false;
     try {
       final db = await _db.database;
@@ -140,6 +145,7 @@ class SyncQueueService {
       print('❌ [SyncQueue] drain error: $e');
     } finally {
       _draining = false;
+      _syncingController.add(false);
       await _emitCount();
     }
   }
@@ -389,5 +395,6 @@ class SyncQueueService {
   void dispose() {
     stop();
     _pendingCountController.close();
+    _syncingController.close();
   }
 }

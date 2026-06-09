@@ -27,13 +27,17 @@ class OfflineBanner extends ConsumerWidget {
 
     // Offline
     if (!isOnline) {
+      final showDraining = sync.isDraining && sync.hasPending;
       return _Banner(
         color: Colors.orange.shade700,
-        icon: Icons.wifi_off,
-        text: sync.hasPending
-            ? 'Sin conexión — ${sync.pendingCount} pendientes'
-            : 'Sin conexión a internet',
-        trailing: onGoOffline != null
+        icon: showDraining ? Icons.sync : Icons.wifi_off,
+        showSpinner: showDraining,
+        text: showDraining
+            ? 'Intentando subir ${sync.pendingCount} pendientes…'
+            : (sync.hasPending
+                ? 'Sin conexión — ${sync.pendingCount} pendientes'
+                : 'Sin conexión a internet'),
+        trailing: !showDraining && onGoOffline != null
             ? _SmallButton(label: 'Modo offline', onTap: onGoOffline!)
             : null,
       );
@@ -71,10 +75,6 @@ class OfflineBanner extends ConsumerWidget {
         color: Colors.blue.shade600,
         icon: Icons.cloud_upload_outlined,
         text: '${sync.pendingCount} pendientes de subir',
-        trailing: _SmallButton(
-          label: 'Sincronizar',
-          onTap: () => ref.read(syncStateProvider.notifier).drainNow(),
-        ),
       );
     }
 
@@ -87,12 +87,14 @@ class _Banner extends StatelessWidget {
   final IconData icon;
   final String text;
   final Widget? trailing;
+  final bool showSpinner;
 
   const _Banner({
     required this.color,
     required this.icon,
     required this.text,
     this.trailing,
+    this.showSpinner = false,
   });
 
   @override
@@ -103,7 +105,16 @@ class _Banner extends StatelessWidget {
       color: color,
       child: Row(
         children: [
-          Icon(icon, color: Colors.white, size: 20),
+          showSpinner
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : Icon(icon, color: Colors.white, size: 20),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -133,7 +144,7 @@ class _SmallButton extends StatelessWidget {
       onPressed: onTap,
       style: TextButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        backgroundColor: Colors.white.withOpacity(0.2),
+        backgroundColor: Colors.white.withValues(alpha: 0.2),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(6),
         ),

@@ -44,7 +44,7 @@ class ScannerControls extends StatelessWidget {
           icon: Icon(icon, size: 28),
           onPressed: onPressed,
           style: IconButton.styleFrom(
-            backgroundColor: Colors.white.withOpacity(0.9),
+            backgroundColor: Colors.white.withValues(alpha: 0.9),
             padding: const EdgeInsets.all(12),
           ),
         ),

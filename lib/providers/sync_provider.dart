@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/sync_queue_service.dart';
+import '../services/sync_service.dart';
 import '../services/conflict_resolver.dart';
 import 'connectivity_provider.dart';
 
@@ -47,6 +48,8 @@ class SyncStateNotifier extends StateNotifier<SyncState> {
 
   final Ref _ref;
   StreamSubscription<int>? _pendingSub;
+  StreamSubscription<bool>? _queueSyncSub;
+  StreamSubscription<bool>? _serviceSyncSub;
   Timer? _refreshTimer;
 
   void _init() {
@@ -56,17 +59,27 @@ class SyncStateNotifier extends StateNotifier<SyncState> {
       state = state.copyWith(pendingCount: count);
       _refreshFailedAndConflicts();
     });
+
+    // Escuchar el estado de drenaje de la cola
+    _queueSyncSub = SyncQueueService.instance.syncingStream.listen((_) {
+      _updateDrainingState();
+    });
+
+    // Escuchar el estado de sincronización completa
+    _serviceSyncSub = SyncService.instance.syncingStream.listen((_) {
+      _updateDrainingState();
+    });
+
     // Refresh periódico para capturar cambios de otros caminos.
     _refreshTimer = Timer.periodic(
       const Duration(seconds: 30),
       (_) => refresh(),
     );
-    // Cuando vuelve la red, refresca y dispara drain.
-    _ref.listen<bool>(isOnlineProvider, (prev, next) {
-      if (next && prev != true) {
-        drainNow();
-      }
-    });
+  }
+
+  void _updateDrainingState() {
+    final active = SyncQueueService.instance.isDraining || SyncService.instance.isSyncing;
+    state = state.copyWith(isDraining: active);
   }
 
   Future<void> refresh() async {
@@ -112,6 +125,8 @@ class SyncStateNotifier extends StateNotifier<SyncState> {
   @override
   void dispose() {
     _pendingSub?.cancel();
+    _queueSyncSub?.cancel();
+    _serviceSyncSub?.cancel();
     _refreshTimer?.cancel();
     super.dispose();
   }

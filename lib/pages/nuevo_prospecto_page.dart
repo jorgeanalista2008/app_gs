@@ -228,7 +228,7 @@ class _NuevoProspectoPageState extends State<NuevoProspectoPage> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: _selectedZoneCode,
+                initialValue: _selectedZoneCode,
                 decoration: const InputDecoration(
                   labelText: 'Zona / Estado',
                   prefixIcon: Icon(Icons.map),
@@ -251,7 +251,7 @@ class _NuevoProspectoPageState extends State<NuevoProspectoPage> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: _selectedCity,
+                initialValue: _selectedCity,
                 decoration: const InputDecoration(
                   labelText: 'Ciudad',
                   prefixIcon: Icon(Icons.location_city),

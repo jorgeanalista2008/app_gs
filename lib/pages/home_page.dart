@@ -6,6 +6,8 @@ import '../services/auth_service.dart';
 import 'login_page.dart';
 import '../atoms/sync_status_chip.dart';
 import '../organisms/connection_wrapper.dart';
+import '../services/sync_service.dart';
+import '../services/connectivity_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -50,6 +52,12 @@ class _HomePageState extends State<HomePage> {
         print('Rol: $_userRole');
         print('Es admin: $_isAdmin');
         print('================');
+
+        // Disparar sincronización completa automática en background si hay red
+        final online = await ConnectivityService.instance.isConnected();
+        if (online) {
+          SyncService.instance.ejecutarSincronizacionCompleta();
+        }
       } else {
         if (mounted) {
           Navigator.pushReplacement(

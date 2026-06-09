@@ -1,12 +1,21 @@
+import 'dart:async';
 import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../core/env.dart';
 import 'database_helper.dart';
 import 'connectivity_service.dart';
 import 'auth_service.dart';
+import 'sync_queue_service.dart';
 import '../repositories/generic_repository.dart';
 
 class SyncService {
   static final SyncService instance = SyncService._();
   final DatabaseHelper _db = DatabaseHelper.instance;
+  bool _isSyncing = false;
+
+  final _syncingController = StreamController<bool>.broadcast();
+  Stream<bool> get syncingStream => _syncingController.stream;
+  bool get isSyncing => _isSyncing;
 
   SyncService._();
 
@@ -528,6 +537,91 @@ class SyncService {
       };
     } catch (e) {
       return {};
+    }
+  }
+
+  /// Ejecuta una sincronización completa en segundo plano de forma automática.
+  /// Sube datos pendientes de la cola, envía visitas completadas, y descarga los últimos clientes/visitas.
+  Future<void> ejecutarSincronizacionCompleta() async {
+    if (_isSyncing) {
+      print('⏳ [SyncService] Sincronización completa ya en progreso, ignorando llamada.');
+      return;
+    }
+    _isSyncing = true;
+    _syncingController.add(true);
+    try {
+      final conectado = await ConnectivityService.instance.isConnected();
+      if (!conectado) {
+        print('📴 [SyncService] Cancelando sync automática: sin conexión a internet.');
+        return;
+      }
+
+      print('🔄 [SyncService] Iniciando sincronización completa automática...');
+
+      // 1. Subir operaciones en cola (prospectos, respuestas, etc.)
+      print('📤 [SyncService] Subiendo operaciones pendientes en la cola...');
+      await SyncQueueService.instance.drain();
+
+      // 2. Subir visitas completadas y respuestas no encoladas
+      print('📤 [SyncService] Subiendo visitas completadas...');
+      await marcarTodoSincronizado();
+
+      // 3. Descargar datos actualizados (clientes, visitas, preguntas)
+      print('📥 [SyncService] Descargando datos desde el servidor...');
+      await descargarDatosFromServer();
+
+      print('✅ [SyncService] Sincronización completa automática finalizada con éxito.');
+    } catch (e) {
+      print('❌ [SyncService] Error en la sincronización completa automática: $e');
+    } finally {
+      _isSyncing = false;
+      _syncingController.add(false);
+    }
+  }
+
+  /// Realiza un HEAD rápido al backend para comprobar conectividad real
+  Future<bool> verificarConexionServidor() async {
+    try {
+      final url = Uri.parse(Env.apiBaseUrl);
+      await http.head(url).timeout(const Duration(seconds: 4));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Intenta subir datos pendientes (cola + visitas) de forma periódica, incluso
+  /// si connectivity reporta offline (doble chequeo contra el servidor).
+  Future<void> intentarSubirDatos() async {
+    if (_isSyncing) return;
+    _isSyncing = true;
+    _syncingController.add(true);
+    try {
+      bool online = await ConnectivityService.instance.isConnected();
+      if (!online) {
+        print('🔍 [SyncService] Sin conexión local reportada. Verificando servidor...');
+        online = await verificarConexionServidor();
+      }
+
+      if (!online) {
+        print('📴 [SyncService] Servidor inalcanzable. Cancelando intento de subida.');
+        return;
+      }
+
+      print('🔄 [SyncService] Iniciando intento periódico de subida de datos...');
+      
+      // Drenar la cola forzando la ejecución
+      await SyncQueueService.instance.drain(force: true);
+
+      // Subir visitas completadas
+      await marcarTodoSincronizado();
+
+      print('✅ [SyncService] Intento periódico de subida finalizado.');
+    } catch (e) {
+      print('❌ [SyncService] Error en intento periódico de subida: $e');
+    } finally {
+      _isSyncing = false;
+      _syncingController.add(false);
     }
   }
 

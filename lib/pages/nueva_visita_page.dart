@@ -268,7 +268,7 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
                         leading: CircleAvatar(
                           backgroundColor: isSelected
                               ? AppColors.primaryColor
-                              : AppColors.primaryColor.withOpacity(0.1),
+                              : AppColors.primaryColor.withValues(alpha: 0.1),
                           child: Text(
                             (cliente['name'] ?? '?')[0].toUpperCase(),
                             style: TextStyle(
@@ -291,7 +291,7 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
                                 margin: const EdgeInsets.only(left: 8),
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: Colors.orange.withOpacity(0.15),
+                                  color: Colors.orange.withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(color: Colors.orange.shade300, width: 0.5),
                                 ),
@@ -334,7 +334,7 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.primaryColor.withOpacity(0.2)),
+              border: Border.all(color: AppColors.primaryColor.withValues(alpha: 0.2)),
             ),
             child: Row(
               children: [
@@ -359,7 +359,7 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
                           margin: const EdgeInsets.only(left: 8),
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: Colors.orange.withOpacity(0.15),
+                            color: Colors.orange.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Text(
@@ -425,7 +425,7 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
                           });
                         },
                         leading: CircleAvatar(
-                          backgroundColor: isSelected ? AppColors.primaryColor : Colors.teal.withOpacity(0.1),
+                          backgroundColor: isSelected ? AppColors.primaryColor : Colors.teal.withValues(alpha: 0.1),
                           child: Icon(
                             Icons.quiz,
                             color: isSelected ? Colors.white : Colors.teal,
@@ -609,7 +609,7 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
                     margin: const EdgeInsets.only(left: 8),
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.15),
+                      color: Colors.orange.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: const Text(
@@ -636,7 +636,7 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.1) : Colors.white,
+          color: isSelected ? color.withValues(alpha: 0.1) : Colors.white,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: isSelected ? color : Colors.grey[300]!, width: isSelected ? 2 : 1),
         ),

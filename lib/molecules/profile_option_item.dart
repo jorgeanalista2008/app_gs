@@ -24,12 +24,12 @@ class ProfileOptionItem extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.cardColor,
         borderRadius: BorderRadius.circular(15),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 5)],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 5)],
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
         leading: CircleAvatar(
-          backgroundColor: (iconColor ?? AppColors.primaryColor).withOpacity(0.1),
+          backgroundColor: (iconColor ?? AppColors.primaryColor).withValues(alpha: 0.1),
           child: Icon(icon, color: iconColor ?? AppColors.primaryColor),
         ),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),

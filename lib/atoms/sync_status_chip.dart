@@ -15,41 +15,35 @@ class SyncStatusChip extends ConsumerWidget {
 
     final ({IconData icon, Color bg, String label}) cfg = _config(isOnline, sync);
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: isOnline && sync.hasPending
-          ? () => ref.read(syncStateProvider.notifier).drainNow()
-          : null,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: cfg.bg,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            sync.isDraining
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : Icon(cfg.icon, size: 14, color: Colors.white),
-            const SizedBox(width: 6),
-            Text(
-              cfg.label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: cfg.bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          sync.isDraining
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : Icon(cfg.icon, size: 14, color: Colors.white),
+          const SizedBox(width: 6),
+          Text(
+            cfg.label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

@@ -23,7 +23,7 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
   double? _lng;
   String? _foto1Base64;
   String? _foto2Base64;
-  Map<String, List<PreguntaOption>> _preguntasOpciones = {};
+  final Map<String, List<PreguntaOption>> _preguntasOpciones = {};
 
   @override
   void initState() {
@@ -121,7 +121,7 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
               border: Border.all(color: Colors.grey[300]!),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),
@@ -179,7 +179,7 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
                             children: [
                               CircleAvatar(
                                 radius: 24,
-                                backgroundColor: AppColors.primaryColor.withOpacity(0.1),
+                                backgroundColor: AppColors.primaryColor.withValues(alpha: 0.1),
                                 child: Text(
                                   widget.visita.customerName.isNotEmpty
                                       ? widget.visita.customerName[0].toUpperCase()
@@ -248,10 +248,10 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 decoration: BoxDecoration(
-                                  color: _getPrioridadColor(widget.visita.priority).withOpacity(0.1),
+                                  color: _getPrioridadColor(widget.visita.priority).withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(
-                                    color: _getPrioridadColor(widget.visita.priority).withOpacity(0.3),
+                                    color: _getPrioridadColor(widget.visita.priority).withValues(alpha: 0.3),
                                   ),
                                 ),
                                 child: Text(
@@ -267,7 +267,7 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 decoration: BoxDecoration(
-                                  color: statusColor.withOpacity(0.1),
+                                  color: statusColor.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Row(

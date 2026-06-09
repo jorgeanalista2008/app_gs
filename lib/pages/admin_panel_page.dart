@@ -251,7 +251,7 @@ class _AdminPanelPageState extends State<AdminPanelPage> with SingleTickerProvid
                       ),
                       const SizedBox(height: 15),
                       DropdownButtonFormField<String>(
-                        value: selectedRole,
+                        initialValue: selectedRole,
                         decoration: const InputDecoration(
                           labelText: 'Rol del Usuario',
                           prefixIcon: Icon(Icons.manage_accounts_outlined),
@@ -545,7 +545,7 @@ class _AdminPanelPageState extends State<AdminPanelPage> with SingleTickerProvid
             child: Row(
               children: [
                 CircleAvatar(
-                  backgroundColor: AppColors.primaryColor.withOpacity(0.1),
+                  backgroundColor: AppColors.primaryColor.withValues(alpha: 0.1),
                   child: Text(
                     initials,
                     style: const TextStyle(
@@ -673,7 +673,7 @@ class _AdminPanelPageState extends State<AdminPanelPage> with SingleTickerProvid
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: ExpansionTile(
             leading: CircleAvatar(
-              backgroundColor: Colors.teal.withOpacity(0.1),
+              backgroundColor: Colors.teal.withValues(alpha: 0.1),
               child: const Icon(Icons.quiz, color: Colors.teal),
             ),
             title: Text(

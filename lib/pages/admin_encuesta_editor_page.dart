@@ -182,7 +182,7 @@ class _AdminEncuestaEditorPageState extends State<AdminEncuestaEditorPage> {
                       ),
                       const SizedBox(height: 15),
                       DropdownButtonFormField<String>(
-                        value: selectedType,
+                        initialValue: selectedType,
                         decoration: const InputDecoration(
                           labelText: 'Tipo de Respuesta',
                           prefixIcon: Icon(Icons.list_alt_outlined),
@@ -226,7 +226,7 @@ class _AdminEncuestaEditorPageState extends State<AdminEncuestaEditorPage> {
                           const Spacer(),
                           Switch(
                             value: isRequired,
-                            activeColor: AppColors.primaryColor,
+                            activeThumbColor: AppColors.primaryColor,
                             onChanged: (val) {
                               setDialogState(() {
                                 isRequired = val;

@@ -18,7 +18,7 @@ class SellerPerformanceCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.cardColor,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8)],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8)],
         border: Border(left: BorderSide(color: AppColors.primaryColor, width: 4)),
       ),
       child: Column(

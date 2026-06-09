@@ -95,56 +95,6 @@ class _ClientesPageState extends State<ClientesPage>
     }
   }
 
-  Future<void> _syncClientes() async {
-    final usuario = _authService.currentUser;
-    if (usuario == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No hay sesión activa'), backgroundColor: Colors.red),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      // Primero subir prospectos u otras operaciones locales pendientes
-      await SyncQueueService.instance.drain();
-
-      final guardados = await _clienteRepo.sincronizarClientes(
-        email: usuario['username'] ?? '',
-        password: usuario['password'] ?? '',
-      );
-
-      final prospectosGuardados = await _clienteRepo.sincronizarProspectos(
-        email: usuario['username'] ?? '',
-        password: usuario['password'] ?? '',
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '✅ Sincronización completa:\n'
-              '• Clientes nuevos: $guardados\n'
-              '• Prospectos nuevos/actualizados: $prospectosGuardados'
-            ),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-        _loadClientes();
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al sincronizar: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
   void _filtrarClientes(String query) {
     _aplicarFiltro();
   }
@@ -171,15 +121,10 @@ class _ClientesPageState extends State<ClientesPage>
             Tab(text: 'Prospectos (${_prospectos.length})'),
           ],
         ),
-        actions: [
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12.0, horizontal: 4.0),
+        actions: const [
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
             child: SyncStatusChip(),
-          ),
-          IconButton(
-            icon: const Icon(Icons.cloud_download),
-            tooltip: 'Sincronizar clientes',
-            onPressed: _isLoading ? null : _syncClientes,
           ),
         ],
       ),
@@ -210,7 +155,7 @@ class _ClientesPageState extends State<ClientesPage>
           if (_clientesFiltrados.isNotEmpty && _searchController.text.isNotEmpty)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: AppColors.primaryColor.withOpacity(0.05),
+              color: AppColors.primaryColor.withValues(alpha: 0.05),
               child: Row(
                 children: [
                   Text(
@@ -268,23 +213,11 @@ class _ClientesPageState extends State<ClientesPage>
               _searchController.text.isEmpty
                   ? (esProspectos
                       ? 'No tienes prospectos. Usa el botón + para crear uno.'
-                      : 'No tienes clientes. Presiona ☁️ para sincronizar.')
+                      : 'No tienes clientes. Conéctate a internet para cargarlos automáticamente.')
                   : 'No se encontraron ${esProspectos ? "prospectos" : "clientes"}',
               style: TextStyle(fontSize: 16, color: Colors.grey[500]),
               textAlign: TextAlign.center,
             ),
-            if (_searchController.text.isEmpty && !esProspectos) ...[
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: _syncClientes,
-                icon: const Icon(Icons.cloud_download),
-                label: const Text('Sincronizar Clientes'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryColor,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ],
           ],
         ),
       );
@@ -319,7 +252,7 @@ class _ClientesPageState extends State<ClientesPage>
               // Avatar con inicial
               CircleAvatar(
                 radius: 28,
-                backgroundColor: AppColors.primaryColor.withOpacity(0.1),
+                backgroundColor: AppColors.primaryColor.withValues(alpha: 0.1),
                 child: Text(
                   cliente.name.isNotEmpty ? cliente.name[0].toUpperCase() : '?',
                   style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.primaryColor),
@@ -380,7 +313,7 @@ class _ClientesPageState extends State<ClientesPage>
                 children: [
                   CircleAvatar(
                     radius: 30,
-                    backgroundColor: AppColors.primaryColor.withOpacity(0.1),
+                    backgroundColor: AppColors.primaryColor.withValues(alpha: 0.1),
                     child: Text(
                       cliente.name.isNotEmpty ? cliente.name[0].toUpperCase() : '?',
                       style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.primaryColor),
@@ -435,7 +368,7 @@ class _ClientesPageState extends State<ClientesPage>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(

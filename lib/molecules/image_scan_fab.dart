@@ -88,7 +88,7 @@ class _ImageScanFabState extends State<ImageScanFab>
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.5),
+              color: Colors.black.withValues(alpha: 0.5),
               blurRadius: 20,
               spreadRadius: 2,
             ),
@@ -175,7 +175,7 @@ class _ImageScanFabState extends State<ImageScanFab>
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.15),
+                  color: color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: color, size: 22),
@@ -228,7 +228,7 @@ class _ImageScanFabState extends State<ImageScanFab>
           boxShadow: [
             BoxShadow(
               color: (_isExpanded ? AppColors.primaryColor : Colors.black)
-                  .withOpacity(0.4),
+                  .withValues(alpha: 0.4),
               blurRadius: 12,
               spreadRadius: 1,
             ),
