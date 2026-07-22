@@ -173,13 +173,13 @@ class _AdminPanelPageState extends State<AdminPanelPage> with SingleTickerProvid
   // Dialog de creación de usuario
   void _mostrarCrearUsuarioDialog() {
     final formKey = GlobalKey<FormState>();
-    final nameController = TextEditingController();
     final usernameController = TextEditingController();
     final passwordController = TextEditingController();
-    final tenantIdController = TextEditingController(text: 'A1000000-0000-0000-0000-000000000001');
-    final companyIdController = TextEditingController(text: 'A1000000-0000-0000-0000-000000000001');
-    final branchIdController = TextEditingController(text: 'E8CCCF7B-F658-4FC4-B348-28EDCB8E229B');
-    String selectedRole = 'vendedor';
+    // Tenant/company/branch por defecto: la app es de un único tenant hoy,
+    // así que el admin ya no necesita conocer ni escribir estos UUIDs.
+    const defaultTenantId = 'A1000000-0000-0000-0000-000000000001';
+    const defaultCompanyId = 'A1000000-0000-0000-0000-000000000001';
+    const defaultBranchId = 'E8CCCF7B-F658-4FC4-B348-28EDCB8E229B';
 
     showDialog(
       context: context,
@@ -202,30 +202,16 @@ class _AdminPanelPageState extends State<AdminPanelPage> with SingleTickerProvid
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       TextFormField(
-                        controller: nameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Nombre Completo',
-                          prefixIcon: Icon(Icons.badge_outlined),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Por favor ingresa el nombre';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 15),
-                      TextFormField(
                         controller: usernameController,
+                        keyboardType: TextInputType.emailAddress,
                         decoration: const InputDecoration(
-                          labelText: 'Usuario / Email',
+                          labelText: 'Correo',
                           prefixIcon: Icon(Icons.alternate_email),
                           border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
                         ),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
-                            return 'Por favor ingresa el usuario';
+                            return 'Por favor ingresa el correo';
                           }
                           return null;
                         },
@@ -249,71 +235,6 @@ class _AdminPanelPageState extends State<AdminPanelPage> with SingleTickerProvid
                           return null;
                         },
                       ),
-                      const SizedBox(height: 15),
-                      DropdownButtonFormField<String>(
-                        initialValue: selectedRole,
-                        decoration: const InputDecoration(
-                          labelText: 'Rol del Usuario',
-                          prefixIcon: Icon(Icons.manage_accounts_outlined),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: 'vendedor', child: Text('Vendedor')),
-                          DropdownMenuItem(value: 'admin', child: Text('Administrador')),
-                        ],
-                        onChanged: (val) {
-                          if (val != null) {
-                            setDialogState(() {
-                              selectedRole = val;
-                            });
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 15),
-                      TextFormField(
-                        controller: tenantIdController,
-                        decoration: const InputDecoration(
-                          labelText: 'Tenant ID (UUID)',
-                          prefixIcon: Icon(Icons.business),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Por favor ingresa el Tenant ID';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 15),
-                      TextFormField(
-                        controller: companyIdController,
-                        decoration: const InputDecoration(
-                          labelText: 'Company ID (UUID)',
-                          prefixIcon: Icon(Icons.location_city_outlined),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Por favor ingresa el Company ID';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 15),
-                      TextFormField(
-                        controller: branchIdController,
-                        decoration: const InputDecoration(
-                          labelText: 'Branch ID (UUID)',
-                          prefixIcon: Icon(Icons.storefront_outlined),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Por favor ingresa el Branch ID';
-                          }
-                          return null;
-                        },
-                      ),
                     ],
                   ),
                 ),
@@ -327,14 +248,15 @@ class _AdminPanelPageState extends State<AdminPanelPage> with SingleTickerProvid
                   onPressed: () async {
                     if (formKey.currentState!.validate()) {
                       try {
+                        final email = usernameController.text.trim();
                         await _dbHelper.crearUsuario(
-                          username: usernameController.text.trim(),
+                          username: email,
                           password: passwordController.text,
-                          fullName: nameController.text.trim(),
-                          role: selectedRole,
-                          tenantId: tenantIdController.text.trim(),
-                          companyId: companyIdController.text.trim(),
-                          branchId: branchIdController.text.trim(),
+                          fullName: email.split('@').first,
+                          role: 'vendedor',
+                          tenantId: defaultTenantId,
+                          companyId: defaultCompanyId,
+                          branchId: defaultBranchId,
                         );
                         if (context.mounted) {
                           Navigator.pop(context);
