@@ -600,15 +600,24 @@ class SyncService {
     }
   }
 
-  /// Realiza un HEAD rápido al backend para comprobar conectividad real
+  /// Realiza un HEAD rápido al backend para comprobar conectividad real.
+  /// Usa un timeout generoso (10s) porque cada llamada de `http.head()` abre
+  /// una conexión nueva (sin reutilizar keep-alive), y el handshake TLS en
+  /// redes móviles puede tardar más que los 4s originales, generando falsos
+  /// negativos aun cuando el servidor sí responde (visto en logs reales
+  /// donde llamadas POST exitosas precedían a un HEAD reportado como fallido).
+  /// Se reintenta una vez antes de declarar el servidor inalcanzable.
   Future<bool> verificarConexionServidor() async {
-    try {
-      final url = Uri.parse(Env.apiBaseUrl);
-      await http.head(url).timeout(const Duration(seconds: 4));
-      return true;
-    } catch (_) {
-      return false;
+    for (var intento = 0; intento < 2; intento++) {
+      try {
+        final url = Uri.parse(Env.apiBaseUrl);
+        await http.head(url).timeout(const Duration(seconds: 10));
+        return true;
+      } catch (e) {
+        print('⚠️ [SyncService] verificarConexionServidor intento ${intento + 1} falló: $e');
+      }
     }
+    return false;
   }
 
   /// Intenta subir datos pendientes (cola + visitas) de forma periódica, incluso
