@@ -7,6 +7,7 @@ import '../atoms/app_button.dart';
 import '../atoms/app_text_field.dart';
 import 'nuevo_prospecto_page.dart';
 import '../services/sync_queue_service.dart';
+import '../services/connectivity_service.dart';
 import '../atoms/sync_status_chip.dart';
 import '../organisms/connection_wrapper.dart';
 
@@ -47,6 +48,8 @@ class _ClientesPageState extends State<ClientesPage>
     });
 
     try {
+      await _sincronizarDesdeApi();
+
       final clientes = await _clienteRepo.getClientesLocales();
       final prospectos = clientes.where((c) => c.isProspect).toList();
       if (mounted) {
@@ -64,6 +67,29 @@ class _ClientesPageState extends State<ClientesPage>
           _isLoading = false;
         });
       }
+    }
+  }
+
+  /// Descarga clientes y prospectos oficializados del backend antes de leer
+  /// SQLite, para que la lista se mantenga al día. Se ignora si no hay
+  /// conexión o si no tenemos credenciales (usuario sin username/password
+  /// locales, ej. login online sin fallback).
+  Future<void> _sincronizarDesdeApi() async {
+    final conectado = await ConnectivityService.instance.isConnected();
+    if (!conectado) return;
+
+    final user = _authService.currentUser;
+    final email = user?['username']?.toString();
+    final password = user?['password']?.toString();
+    if (email == null || email.isEmpty || password == null || password.isEmpty) {
+      return;
+    }
+
+    try {
+      await _clienteRepo.sincronizarClientes(email: email, password: password);
+      await _clienteRepo.sincronizarProspectos(email: email, password: password);
+    } catch (e) {
+      print('⚠️ [ClientesPage] error sincronizando desde API: $e');
     }
   }
 
