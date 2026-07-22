@@ -727,32 +727,12 @@ class DatabaseHelper {
       }, where: 'username = ?', whereArgs: ['admin']);
     }
 
-    final vendedorExistente = await db.query('usuarios', where: 'username = ?', whereArgs: ['vendedor@solsumed.com']);
-    if (vendedorExistente.isEmpty) {
-      await db.insert('usuarios', {
-        'id': '425CFE2C-0C0E-4199-9618-00E7BC6860B2',
-        'username': 'vendedor@solsumed.com',
-        'password': '123456',
-        'full_name': 'Vendedor Principal',
-        'role': 'vendedor',
-        'activo': 1,
-        'fecha_creacion': DateTime.now().toIso8601String(),
-        'tenant_id': 'A1000000-0000-0000-0000-000000000001',
-        'company_id': 'A1000000-0000-0000-0000-000000000001',
-        'branch_id': 'E8CCCF7B-F658-4FC4-B348-28EDCB8E229B',
-      });
-      print('✅ Usuario vendedor creado');
-    } else {
-      await db.update('usuarios', {
-        'id': '425CFE2C-0C0E-4199-9618-00E7BC6860B2',
-        'tenant_id': 'A1000000-0000-0000-0000-000000000001',
-        'company_id': 'A1000000-0000-0000-0000-000000000001',
-        'branch_id': 'E8CCCF7B-F658-4FC4-B348-28EDCB8E229B',
-      }, where: 'username = ?', whereArgs: ['vendedor@solsumed.com']);
-      print('✅ Usuario vendedor actualizado con nuevos campos');
-    }
-
-  
+    // Ya no se siembra un usuario "vendedor@solsumed.com" local de prueba: los
+    // vendedores deben existir en el backend real y su cuenta se cachea
+    // localmente la primera vez que inician sesión online (ver AuthService.login).
+    // Se elimina la fila si quedó de una instalación previa a este cambio,
+    // para que dispositivos ya probados dejen de "loguear" con ella offline.
+    await db.delete('usuarios', where: 'username = ?', whereArgs: ['vendedor@solsumed.com']);
   }
 
   /// Verifica credenciales de login
