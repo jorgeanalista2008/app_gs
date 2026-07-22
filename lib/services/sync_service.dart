@@ -6,6 +6,7 @@ import 'database_helper.dart';
 import 'connectivity_service.dart';
 import 'auth_service.dart';
 import 'sync_queue_service.dart';
+import 'image_upload_service.dart';
 import '../repositories/generic_repository.dart';
 
 class SyncService {
@@ -367,6 +368,27 @@ class SyncService {
                             (respuestaRow['fecha_creacion']?.toString().substring(0, 10)) ?? 
                             DateTime.now().toIso8601String().substring(0, 10);
 
+          // Las fotos se suben aparte a /images/upload-base64 y se referencian
+          // por id en photo_1_id/photo_2_id (columnas dedicadas en visit_records).
+          final foto1Path = respuestaRow['foto1_path']?.toString();
+          final foto2Path = respuestaRow['foto2_path']?.toString();
+          int? photo1Id;
+          int? photo2Id;
+          if (foto1Path != null && foto1Path.isNotEmpty) {
+            photo1Id = await ImageUploadService.instance.subirFoto(
+              localPath: foto1Path,
+              ownerType: 'visit',
+              ownerId: visitId,
+            );
+          }
+          if (foto2Path != null && foto2Path.isNotEmpty) {
+            photo2Id = await ImageUploadService.instance.subirFoto(
+              localPath: foto2Path,
+              ownerType: 'visit',
+              ownerId: visitId,
+            );
+          }
+
           final visitBody = <String, dynamic>{
             'email': username,
             'password': pass,
@@ -376,9 +398,8 @@ class SyncService {
             'latitude': respuestaRow['lat'],
             'longitude': respuestaRow['lng'],
             'description': visitRow['notes'] ?? '',
-            'photo_1': respuestaRow['foto1_path'],
-            'photo_2': respuestaRow['foto2_path'],
-            'extra_data': {},
+            if (photo1Id != null) 'photo_1_id': photo1Id,
+            if (photo2Id != null) 'photo_2_id': photo2Id,
           };
 
           print('🔍 Sincronizando visita - ID local: $visitId, parsed scheduleId: $scheduleId');

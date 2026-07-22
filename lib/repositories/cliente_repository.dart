@@ -6,6 +6,7 @@ import '../core/env.dart';
 import '../models/cliente_model.dart';
 import '../services/database_helper.dart';
 import '../services/sync_queue_service.dart';
+import '../services/image_upload_service.dart';
 import 'generic_repository.dart';
 
 class ClienteRepository {
@@ -68,8 +69,75 @@ class ClienteRepository {
         serverId: serverId,
       );
       print('🔗 [Cliente] mapeado $localId → $serverId');
+
+      // El DTO de creación de prospecto no acepta fotos; se suben aparte
+      // ahora que ya existe un id de servidor para asociarlas, y luego se
+      // vinculan explícitamente vía POST /salesperson/auth/prospects/:id/update
+      // (photo_1_id/photo_2_id) para que queden con FK real en dbo.prospects.
+      final localRow = await db.query('clientes', where: 'id = ?', whereArgs: [localId], limit: 1);
+      if (localRow.isNotEmpty) {
+        final photo1 = localRow.first['photo_1']?.toString();
+        final photo2 = localRow.first['photo_2']?.toString();
+        int? photo1Id;
+        int? photo2Id;
+        if (photo1 != null && photo1.isNotEmpty) {
+          photo1Id = await ImageUploadService.instance.subirFoto(
+            localPath: photo1,
+            ownerType: 'customer',
+            ownerId: serverId,
+          );
+        }
+        if (photo2 != null && photo2.isNotEmpty) {
+          photo2Id = await ImageUploadService.instance.subirFoto(
+            localPath: photo2,
+            ownerType: 'customer',
+            ownerId: serverId,
+          );
+        }
+        if (photo1Id != null || photo2Id != null) {
+          await _linkProspectPhotos(
+            operation: operation,
+            serverId: serverId,
+            photo1Id: photo1Id,
+            photo2Id: photo2Id,
+          );
+        }
+      }
     } catch (e) {
       print('❌ [Cliente] error procesando éxito push: $e');
+    }
+  }
+
+  /// Asocia photo_1_id/photo_2_id al prospecto ya creado en el backend,
+  /// reutilizando las credenciales (email/password) del payload original
+  /// que se envió al crearlo.
+  static Future<void> _linkProspectPhotos({
+    required Map<String, dynamic> operation,
+    required String serverId,
+    int? photo1Id,
+    int? photo2Id,
+  }) async {
+    try {
+      final payloadJson = operation['payload_json'] as String?;
+      if (payloadJson == null) return;
+      final originalPayload = jsonDecode(payloadJson) as Map<String, dynamic>;
+      final email = originalPayload['email'];
+      final password = originalPayload['password'];
+      if (email == null || password == null) return;
+
+      await GenericRepository.instance.postOnline<Map<String, dynamic>>(
+        path: '/salesperson/auth/prospects/$serverId/update',
+        body: {
+          'email': email,
+          'password': password,
+          if (photo1Id != null) 'photo_1_id': photo1Id,
+          if (photo2Id != null) 'photo_2_id': photo2Id,
+        },
+        fromJson: (json) => json,
+      );
+      print('🔗 [Cliente] fotos vinculadas al prospecto $serverId (photo_1_id=$photo1Id, photo_2_id=$photo2Id)');
+    } catch (e) {
+      print('❌ [Cliente] error vinculando fotos de prospecto $serverId: $e');
     }
   }
 
@@ -153,6 +221,9 @@ class ClienteRepository {
     }
 
     // Payload para POST /salesperson/auth/prospects (CredsCreateProspectDto).
+    // salesperson_id lo deriva el backend de email/password; no se envía.
+    // Las fotos se suben aparte (ver _onCustomerPushSuccess) porque el DTO
+    // no tiene campos photo_1/photo_2.
     final payload = <String, dynamic>{
       'name': name,
       if (taxId.isNotEmpty) 'tax_id': taxId,
@@ -162,7 +233,6 @@ class ClienteRepository {
       if (notes.isNotEmpty) 'notes': notes,
       if (lat != null) 'latitude': lat,
       if (lng != null) 'longitude': lng,
-      if (salespersonId != null) 'salesperson_id': salespersonId,
       'source': 'OTRO',
       if (salespersonEmail != null) 'email': salespersonEmail,
       if (salespersonPassword != null) 'password': salespersonPassword,
@@ -170,8 +240,6 @@ class ClienteRepository {
       if (city != null && city.isNotEmpty) 'city': city,
       if (zoneCode != null && zoneCode.isNotEmpty) 'zone_code': zoneCode,
       if (nextFollowupDate != null && nextFollowupDate.isNotEmpty) 'next_followup_date': nextFollowupDate,
-      if (photo1 != null && photo1.isNotEmpty) 'photo_1': photo1,
-      if (photo2 != null && photo2.isNotEmpty) 'photo_2': photo2,
     };
 
     await SyncQueueService.instance.enqueue(

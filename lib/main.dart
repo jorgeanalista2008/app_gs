@@ -4,6 +4,7 @@ import 'services/database_helper.dart';
 import 'services/connectivity_service.dart';
 import 'services/sync_queue_service.dart';
 import 'services/conflict_resolver.dart';
+import 'services/background_sync_service.dart';
 import 'repositories/cliente_repository.dart';
 import 'pages/login_page.dart';
 import 'core/app_colors.dart';
@@ -23,6 +24,8 @@ void main() async {
   // Limpia operaciones exitosas viejas en background.
   SyncQueueService.instance.purgeOldSuccessful();
   ConflictResolver.instance.purgeOld();
+  // Sincronización periódica del SO para cuando la app está cerrada.
+  BackgroundSyncService.initialize();
 
   runApp(const ProviderScope(child: MyApp()));
 }
