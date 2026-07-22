@@ -44,20 +44,26 @@ class ClienteModel {
   });
 
   factory ClienteModel.fromJson(Map<String, dynamic> json) {
+    final isProspectVal = json['is_prospect'] == 1 ||
+        json['is_prospect'] == true ||
+        json['status'] != null ||
+        json['converted_customer_id'] != null;
+
     return ClienteModel(
       id: json['id']?.toString() ?? '',
       name: json['name']?.toString() ?? 'Sin nombre',
       codeClientProfit: json['code_client_profit']?.toString() ?? '',
       taxId: json['tax_id']?.toString() ?? '',
       telefono: json['phone']?.toString() ?? json['telefono']?.toString() ?? '',
-      email: json['email']?.toString() ?? '',
+      email: json['contact_email']?.toString() ?? json['email']?.toString() ?? '',
       direccion: json['address']?.toString() ?? json['direccion']?.toString() ?? '',
       activo: json['active'] == true ||
           json['active']?.toString() == 'true' ||
-          json['activo'] == 1,
+          json['activo'] == 1 ||
+          json['status'] != 'DELETED',
       tipo: json['type']?.toString() ?? json['tipo']?.toString() ?? '',
-      isProspect: json['is_prospect'] == 1 || json['is_prospect'] == true,
-      serverId: json['server_id']?.toString(),
+      isProspect: isProspectVal,
+      serverId: json['server_id']?.toString() ?? json['id']?.toString(),
       notes: json['notes']?.toString() ?? '',
       sincronizado: (json['sincronizado'] ?? 1) == 1,
       contactName: json['contact_name']?.toString(),

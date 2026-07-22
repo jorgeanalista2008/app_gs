@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../models/visita_model.dart';
@@ -29,6 +30,7 @@ class _VisitasPageState extends State<VisitasPage> with SingleTickerProviderStat
   final AuthService _authService = AuthService.instance;
   final TextEditingController _searchController = TextEditingController();
   late final TabController _tabController;
+  StreamSubscription<bool>? _syncSub;
 
   List<VisitaModel> _programadas = [];
   List<VisitaModel> _completadas = [];
@@ -44,10 +46,17 @@ class _VisitasPageState extends State<VisitasPage> with SingleTickerProviderStat
       if (!_tabController.indexIsChanging) _aplicarFiltro();
     });
     _loadVisitas();
+
+    _syncSub = SyncService.instance.syncingStream.listen((syncing) {
+      if (!syncing && mounted) {
+        _loadVisitas();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _syncSub?.cancel();
     _searchController.dispose();
     _tabController.dispose();
     super.dispose();

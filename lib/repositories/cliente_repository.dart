@@ -62,6 +62,12 @@ class ClienteRepository {
         where: 'id = ?',
         whereArgs: [localId],
       );
+      await db.update(
+        'visitas',
+        {'customer_id': serverId},
+        where: 'customer_id = ?',
+        whereArgs: [localId],
+      );
       await DatabaseHelper.instance.registrarIdMapping(
         entityType: entityType,
         localId: localId,
@@ -170,8 +176,9 @@ class ClienteRepository {
       if (city != null && city.isNotEmpty) 'city': city,
       if (zoneCode != null && zoneCode.isNotEmpty) 'zone_code': zoneCode,
       if (nextFollowupDate != null && nextFollowupDate.isNotEmpty) 'next_followup_date': nextFollowupDate,
-      if (photo1 != null && photo1.isNotEmpty) 'photo_1': photo1,
-      if (photo2 != null && photo2.isNotEmpty) 'photo_2': photo2,
+      // Deshabilitado por ahora:
+      // if (photo1 != null && photo1.isNotEmpty) 'photo_1': photo1,
+      // if (photo2 != null && photo2.isNotEmpty) 'photo_2': photo2,
     };
 
     await SyncQueueService.instance.enqueue(
@@ -344,13 +351,11 @@ class ClienteRepository {
       final payload = {
         'email': email,
         'password': password,
-        'page': 1,
-        'limit': 200,
       };
       print('📡 === DETALLE DE ENVÍO HTTP (DEBUG) ===');
       print('🔄 Método: POST');
       print('🌐 URL: $url');
-      print('🔑 Headers: {"Content-Type": "application/json"}');
+      print('🔑 Headers: {"Accept": "*/*", "Content-Type": "application/json"}');
       try {
         const encoder = JsonEncoder.withIndent('  ');
         final prettyJson = encoder.convert(payload);
@@ -362,7 +367,10 @@ class ClienteRepository {
 
       final response = await http.post(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Accept': '*/*',
+          'Content-Type': 'application/json',
+        },
         body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 30));
 

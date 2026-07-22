@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
+import 'sync_service.dart';
+
 class ConnectivityService {
   static final ConnectivityService instance = ConnectivityService._();
   ConnectivityService._();
@@ -31,6 +33,10 @@ class ConnectivityService {
                         result == ConnectivityResult.wifi ||
                         result == ConnectivityResult.ethernet;
       print(conectado ? '🌐 Conectado a internet' : '📴 Sin conexión a internet');
+      if (conectado) {
+        print('⚡ [ConnectivityService] Red detectada/recuperada → Ejecutando sincronización automática...');
+        SyncService.instance.ejecutarSincronizacionCompleta();
+      }
     });
   }
 

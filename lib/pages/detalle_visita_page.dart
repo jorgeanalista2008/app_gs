@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
@@ -5,6 +6,8 @@ import '../models/visita_model.dart';
 import '../repositories/encuesta_repository.dart';
 import '../services/database_helper.dart';
 import '../models/pregunta_model.dart';
+import '../services/sync_service.dart';
+import '../services/auth_service.dart';
 
 class DetalleVisitaPage extends StatefulWidget {
   final VisitaModel visita;
@@ -17,6 +20,9 @@ class DetalleVisitaPage extends StatefulWidget {
 
 class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
   final EncuestaRepository _encuestaRepo = EncuestaRepository();
+  late VisitaModel _visita;
+  StreamSubscription<bool>? _syncSub;
+
   bool _isLoading = true;
   List<dynamic> _respuestas = [];
   double? _lat;
@@ -28,13 +34,39 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
   @override
   void initState() {
     super.initState();
+    _visita = widget.visita;
     _loadDetalle();
+
+    _syncSub = SyncService.instance.syncingStream.listen((syncing) {
+      if (!syncing && mounted) {
+        _loadDetalle();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _syncSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadDetalle() async {
     setState(() => _isLoading = true);
     try {
       final db = await DatabaseHelper.instance.database;
+
+      // 1. Recargar modelo actualizado desde SQLite
+      final vRows = await db.query(
+        'visitas',
+        where: 'id = ?',
+        whereArgs: [widget.visita.id],
+        limit: 1,
+      );
+      if (vRows.isNotEmpty) {
+        _visita = VisitaModel.fromJson(vRows.first);
+      }
+
+      // 2. Cargar catálogo local de opciones de preguntas
       final preguntasData = await db.query('preguntas');
       for (var p in preguntasData) {
         final qId = p['id']?.toString() ?? '';
@@ -42,17 +74,51 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
         _preguntasOpciones[qId] = PreguntaOption.parseOptions(opcionesStr);
       }
 
-      final rows = await _encuestaRepo.getRespuestas(widget.visita.id);
-      if (rows.isNotEmpty) {
-        final row = rows.first;
-        final rawJson = row['respuestas_json'] as String?;
-        if (rawJson != null && rawJson.isNotEmpty) {
-          _respuestas = jsonDecode(rawJson) as List;
+      bool loadedFromBackend = false;
+
+      // 3. Si la visita está sincronizada (o tiene ID numérico del backend), traer de la API
+      if (_visita.sincronizado || !widget.visita.id.startsWith('visita_')) {
+        final userId = AuthService.instance.userId;
+        String? username;
+        String? pass;
+        if (userId != null) {
+          final userLocal = await DatabaseHelper.instance.getUsuario(userId);
+          if (userLocal != null) {
+            username = userLocal['username'];
+            pass = userLocal['password'];
+          }
         }
-        _lat = row['lat'] as double?;
-        _lng = row['lng'] as double?;
-        _foto1Base64 = row['foto1_path'] as String?;
-        _foto2Base64 = row['foto2_path'] as String?;
+
+        if (username != null && pass != null) {
+          final apiResult = await _encuestaRepo.fetchVisitaConRespuestasFromApi(
+            visitId: _visita.id,
+            email: username,
+            password: pass,
+          );
+
+          if (apiResult != null && apiResult['answers'] is List) {
+            _respuestas = apiResult['answers'] as List;
+            _lat = (apiResult['latitude'] is num) ? (apiResult['latitude'] as num).toDouble() : _lat;
+            _lng = (apiResult['longitude'] is num) ? (apiResult['longitude'] as num).toDouble() : _lng;
+            loadedFromBackend = true;
+          }
+        }
+      }
+
+      // 4. Si la visita es local offline / sin sincronizar o falló la API, consultar SQLite local
+      if (!loadedFromBackend) {
+        final rows = await _encuestaRepo.getRespuestas(widget.visita.id);
+        if (rows.isNotEmpty) {
+          final row = rows.first;
+          final rawJson = row['respuestas_json'] as String?;
+          if (rawJson != null && rawJson.isNotEmpty) {
+            _respuestas = jsonDecode(rawJson) as List;
+          }
+          _lat = row['lat'] as double?;
+          _lng = row['lng'] as double?;
+          _foto1Base64 = row['foto1_path'] as String?;
+          _foto2Base64 = row['foto2_path'] as String?;
+        }
       }
     } catch (e) {
       debugPrint('Error cargando detalle de visita: $e');
@@ -147,8 +213,8 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = widget.visita.sincronizado ? Colors.green : Colors.blue;
-    final statusText = widget.visita.sincronizado ? 'Sincronizada' : 'Completada (Sin subir)';
+    final statusColor = _visita.sincronizado ? Colors.green : Colors.blue;
+    final statusText = _visita.sincronizado ? 'Sincronizada' : 'Completada (Sin subir)';
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
@@ -348,22 +414,26 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
                               separatorBuilder: (context, index) => const Divider(height: 20),
                               itemBuilder: (context, index) {
                                 final res = _respuestas[index] as Map<String, dynamic>;
-                                final questionText = res['description'] ??
+                                final questionText = res['question_text'] ??
+                                    res['description'] ??
                                     res['question_description'] ??
                                     'Pregunta ${res['question_id']}';
                                 final type = res['question_type'] ?? '';
                                 final optionId = res['answer_option']?.toString();
-                                final text = res['answer_text'];
+                                final text = res['answer_text']?.toString();
 
                                 String displayText = 'Sin responder';
-                                if (optionId != null) {
-                                  final opts = _preguntasOpciones[res['question_id']?.toString() ?? ''] ?? [];
+                                if (optionId != null && optionId.isNotEmpty) {
+                                  List<PreguntaOption> opts = _preguntasOpciones[res['question_id']?.toString() ?? ''] ?? [];
+                                  if (opts.isEmpty && res['response_options'] != null) {
+                                    opts = PreguntaOption.parseOptions(res['response_options'].toString());
+                                  }
                                   final match = opts.firstWhere(
-                                    (o) => o.id == optionId,
+                                    (o) => o.id == optionId || o.id == int.tryParse(optionId)?.toString(),
                                     orElse: () => PreguntaOption(id: optionId, label: optionId),
                                   );
                                   displayText = match.label;
-                                } else if (text != null) {
+                                } else if (text != null && text.isNotEmpty) {
                                   displayText = text;
                                 }
 

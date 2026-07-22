@@ -251,6 +251,7 @@ class _AdminPanelPageState extends State<AdminPanelPage> with SingleTickerProvid
                       ),
                       const SizedBox(height: 15),
                       DropdownButtonFormField<String>(
+                        isExpanded: true,
                         initialValue: selectedRole,
                         decoration: const InputDecoration(
                           labelText: 'Rol del Usuario',

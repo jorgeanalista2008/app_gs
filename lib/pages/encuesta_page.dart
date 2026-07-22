@@ -200,8 +200,8 @@ class _EncuestaPageState extends State<EncuestaPage> {
                     _buildHeaderVisita(),
                     const SizedBox(height: 24),
                     _buildPreguntasSection(),
-                    const SizedBox(height: 24),
-                    _buildFotosSection(),
+                    // const SizedBox(height: 24),
+                    // _buildFotosSection(), // Oculto temporalmente para versión futura
                     const SizedBox(height: 32),
                     AppButton(
                       text: 'GUARDAR ENCUESTA',

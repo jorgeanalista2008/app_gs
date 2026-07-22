@@ -182,6 +182,7 @@ class _AdminEncuestaEditorPageState extends State<AdminEncuestaEditorPage> {
                       ),
                       const SizedBox(height: 15),
                       DropdownButtonFormField<String>(
+                        isExpanded: true,
                         initialValue: selectedType,
                         decoration: const InputDecoration(
                           labelText: 'Tipo de Respuesta',
