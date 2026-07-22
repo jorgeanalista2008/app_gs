@@ -17,13 +17,17 @@ dart format .                             # format
 flutter test                              # all tests
 flutter test test/widget_test.dart        # single test file
 flutter test --name "<pattern>"           # filter by test name
-flutter build apk                         # Android APK
+flutter build apk                         # Android APK (prod API by default)
 flutter build appbundle                   # Android AAB
 flutter build ios / web / linux / macos / windows
 dart run flutter_launcher_icons           # regenerate launcher icons from assets/logo.png
+
+# Point at a different backend (e.g. local dev) without editing env.dart:
+flutter run --dart-define=API_BASE_URL=http://192.168.0.128:3000
+flutter build apk --dart-define=API_BASE_URL=http://192.168.0.128:3000
 ```
 
-API base URL is **hardcoded** in `lib/core/env.dart` (`Env.apiBaseUrl`). Change there when pointing at a different backend — there is no `.env` loader.
+API base URL is set via a compile-time `--dart-define=API_BASE_URL=...` read in `lib/core/env.dart` (`Env.apiBaseUrl`, `String.fromEnvironment`). There is no `.env` loader — if `API_BASE_URL` isn't passed, it defaults to the production API at `https://movil.grupo-solsumed.com`. Any build/run command without the flag targets production.
 
 ## Architecture
 
