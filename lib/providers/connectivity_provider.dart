@@ -10,9 +10,7 @@ final connectivityStreamProvider = StreamProvider<bool>((ref) async* {
   yield await service.isConnected();
   // Cambios subsecuentes
   await for (final result in service.onConnectivityChanged) {
-    yield result == ConnectivityResult.mobile ||
-        result == ConnectivityResult.wifi ||
-        result == ConnectivityResult.ethernet;
+    yield result != ConnectivityResult.none;
   }
 });
 
