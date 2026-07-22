@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../core/app_colors.dart';
 import '../services/database_helper.dart';
 import '../services/auth_service.dart';
+import '../repositories/generic_repository.dart';
 import 'admin_encuesta_editor_page.dart';
 
 class AdminPanelPage extends StatefulWidget {
@@ -16,6 +17,7 @@ class _AdminPanelPageState extends State<AdminPanelPage> with SingleTickerProvid
   late TabController _tabController;
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
   final AuthService _authService = AuthService.instance;
+  final GenericRepository _repo = GenericRepository.instance;
 
   List<Map<String, dynamic>> _usuarios = [];
   List<Map<String, dynamic>> _plantillas = [];
@@ -249,22 +251,40 @@ class _AdminPanelPageState extends State<AdminPanelPage> with SingleTickerProvid
                     if (formKey.currentState!.validate()) {
                       try {
                         final email = usernameController.text.trim();
+                        final password = passwordController.text;
                         await _dbHelper.crearUsuario(
                           username: email,
-                          password: passwordController.text,
+                          password: password,
                           fullName: email.split('@').first,
                           role: 'vendedor',
                           tenantId: defaultTenantId,
                           companyId: defaultCompanyId,
                           branchId: defaultBranchId,
                         );
+
+                        // Además de guardarlo local, lo registra en el backend
+                        // (dbo.users) para que pueda loguearse online y sincronizar
+                        // clientes/visitas. Si falla (sin permisos, sin red, etc.)
+                        // el usuario local igual queda creado y se avisa.
+                        final registradoOnline = await _registrarVendedorEnBackend(
+                          email: email,
+                          password: password,
+                          fullName: email.split('@').first,
+                          tenantId: defaultTenantId,
+                          branchId: defaultBranchId,
+                        );
+
                         if (context.mounted) {
                           Navigator.pop(context);
                           _loadData();
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Usuario creado exitosamente.'),
-                              backgroundColor: AppColors.successColor,
+                            SnackBar(
+                              content: Text(registradoOnline
+                                  ? 'Usuario creado y registrado en el servidor.'
+                                  : 'Usuario creado localmente. No se pudo registrar en el servidor (revisa conexión/permisos); no podrá sincronizar hasta que se registre allí.'),
+                              backgroundColor: registradoOnline
+                                  ? AppColors.successColor
+                                  : Colors.orange.shade700,
                             ),
                           );
                         }
@@ -293,6 +313,51 @@ class _AdminPanelPageState extends State<AdminPanelPage> with SingleTickerProvid
         );
       },
     );
+  }
+
+  /// Registra el vendedor en el backend (dbo.users) vía POST /user, resolviendo
+  /// primero el role_id de 'Vendedor' para el tenant. Requiere que el admin
+  /// logueado tenga un token online con permisos de 'roles' y 'users'.
+  /// Devuelve true si quedó registrado en el servidor, false si no fue posible
+  /// (offline, sin permisos, etc.) — en cuyo caso el usuario solo existe local.
+  Future<bool> _registrarVendedorEnBackend({
+    required String email,
+    required String password,
+    required String fullName,
+    required String tenantId,
+    required String branchId,
+  }) async {
+    try {
+      final roles = await _repo.getListOnline<Map<String, dynamic>>(
+        path: '/role/tenant/$tenantId',
+        fromJson: (json) => json,
+      );
+      final vendedorRole = roles.firstWhere(
+        (r) => r['name']?.toString().toLowerCase() == 'vendedor',
+        orElse: () => {},
+      );
+      final roleId = vendedorRole['id']?.toString();
+      if (roleId == null) {
+        print('⚠️ [Admin] rol Vendedor no encontrado en el servidor para tenant $tenantId');
+        return false;
+      }
+
+      final creado = await _repo.postOnline<Map<String, dynamic>>(
+        path: '/user',
+        body: {
+          'email': email,
+          'password_hash': password,
+          'full_name': fullName,
+          'role_id': roleId,
+          'branch_id': branchId,
+        },
+        fromJson: (json) => json,
+      );
+      return creado != null;
+    } catch (e) {
+      print('❌ [Admin] error registrando vendedor en backend: $e');
+      return false;
+    }
   }
 
   // Dialog de creación de plantilla de encuesta
