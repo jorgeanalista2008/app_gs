@@ -50,7 +50,11 @@ class AuthService {
             _onlineToken = token.toString();
             final userId = userMap['id']?.toString() ?? '';
             final fullName = userMap['full_name']?.toString() ?? '';
-            final role = userMap['role']?['name']?.toString().toLowerCase() ?? 'vendedor';
+            // El backend nombra el rol de administrador "Administrador" (no "admin"),
+            // así que se normaliza por contenido en vez de comparar el string exacto,
+            // o isAdmin/isVendedor nunca coinciden y se ocultan menús según el rol.
+            final rawRole = userMap['role']?['name']?.toString().toLowerCase() ?? 'vendedor';
+            final role = rawRole.contains('admin') ? 'admin' : 'vendedor';
             final tenantId = userMap['tenant_id']?.toString();
             final companyId = userMap['company_id']?.toString() ?? userMap['tenant_id']?.toString();
             final branchId = userMap['branch_id']?.toString();
