@@ -20,7 +20,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 9,
+      version: 10,
       onCreate: (db, version) async {
         await _createTables(db);
       },
@@ -73,6 +73,11 @@ class DatabaseHelper {
         if (oldVersion < 9) {
           await _addUserIdentifiers(db);
         }
+        if (oldVersion < 10) {
+          try {
+            await db.execute('ALTER TABLE preguntas ADD COLUMN server_id TEXT');
+          } catch (_) {}
+        }
       },
     );
   }
@@ -123,6 +128,7 @@ class DatabaseHelper {
       updated_at TEXT,
       server_updated_at TEXT,
       sincronizado INTEGER DEFAULT 0,
+      server_id TEXT,
       FOREIGN KEY (encuesta_id) REFERENCES encuestas(id)
     )
   ''');
@@ -883,6 +889,8 @@ class DatabaseHelper {
     int esRequerida = 0,
     String? opciones,
     int orden = 0,
+    String? serverId,
+    int sincronizado = 0,
   }) async {
     final db = await database;
     await db.insert('preguntas', {
@@ -893,7 +901,25 @@ class DatabaseHelper {
       'es_requerida': esRequerida,
       'opciones': opciones,
       'orden': orden,
+      'server_id': serverId,
+      'sincronizado': sincronizado,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
     }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  /// Marca una pregunta local como sincronizada, asociando su id de servidor
+  Future<void> marcarPreguntaSincronizada(String localId, String serverId) async {
+    final db = await database;
+    await db.update(
+      'preguntas',
+      {
+        'server_id': serverId,
+        'sincronizado': 1,
+        'server_updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [localId],
+    );
   }
 
   /// Elimina una pregunta de una plantilla

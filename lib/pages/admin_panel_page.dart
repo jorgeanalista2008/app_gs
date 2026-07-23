@@ -44,6 +44,7 @@ class _AdminPanelPageState extends State<AdminPanelPage> with SingleTickerProvid
 
     try {
       final users = await _dbHelper.getUsuarios();
+      await _asegurarEncuestaGeneral();
       final templates = await _dbHelper.getPlantillasEncuestas();
 
       final Map<String, int> counts = {};
@@ -74,6 +75,18 @@ class _AdminPanelPageState extends State<AdminPanelPage> with SingleTickerProvid
         );
       }
     }
+  }
+
+  // Asegura que exista la única plantilla global de encuesta usada por
+  // el backend (/visit/questions no soporta múltiples plantillas).
+  Future<void> _asegurarEncuestaGeneral() async {
+    final existentes = await _dbHelper.getPlantillasEncuestas();
+    if (existentes.any((e) => e['id'] == 'encuesta_general')) return;
+    await _dbHelper.guardarPlantillaEncuesta(
+      id: 'encuesta_general',
+      titulo: 'Encuesta de Visita',
+      descripcion: 'Cuestionario general de visitas a clientes',
+    );
   }
 
   // Helper para insignias de rol
@@ -360,130 +373,6 @@ class _AdminPanelPageState extends State<AdminPanelPage> with SingleTickerProvid
     }
   }
 
-  // Dialog de creación de plantilla de encuesta
-  void _mostrarCrearEncuestaDialog() {
-    final formKey = GlobalKey<FormState>();
-    final titleController = TextEditingController();
-    final descController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
-            children: [
-              Icon(Icons.quiz_outlined, color: AppColors.primaryColor),
-              SizedBox(width: 10),
-              Text('Nueva Encuesta', style: TextStyle(fontWeight: FontWeight.bold)),
-            ],
-          ),
-          content: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: titleController,
-                  decoration: const InputDecoration(
-                    labelText: 'Título de la Encuesta',
-                    prefixIcon: Icon(Icons.title),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Por favor ingresa el título';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 15),
-                TextFormField(
-                  controller: descController,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Descripción / Instrucciones',
-                    prefixIcon: Icon(Icons.description_outlined),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar', style: TextStyle(color: AppColors.textSecondary)),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (formKey.currentState!.validate()) {
-                  final newId = 'enc_${DateTime.now().microsecondsSinceEpoch}';
-                  await _dbHelper.guardarPlantillaEncuesta(
-                    id: newId,
-                    titulo: titleController.text.trim(),
-                    descripcion: descController.text.trim(),
-                  );
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    _loadData();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Plantilla de encuesta creada.'),
-                        backgroundColor: AppColors.successColor,
-                      ),
-                    );
-                  }
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryColor,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              child: const Text('Crear', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // Confirmar y eliminar encuesta
-  void _confirmarEliminarEncuesta(Map<String, dynamic> survey) {
-    final surveyId = survey['id']?.toString() ?? '';
-    final titulo = survey['titulo']?.toString() ?? '';
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Eliminar Encuesta'),
-        content: Text('¿Estás seguro de que deseas eliminar la encuesta "$titulo" junto con todas sus preguntas?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _dbHelper.eliminarPlantillaEncuesta(surveyId);
-              _loadData();
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Encuesta eliminada exitosamente.'),
-                    backgroundColor: AppColors.successColor,
-                  ),
-                );
-              }
-            },
-            child: const Text('Eliminar', style: TextStyle(color: AppColors.errorColor)),
-          ),
-        ],
-      ),
-    );
-  }
-
   // Construir pestaña de usuarios
   Widget _buildUsuariosTab() {
     if (_usuarios.isEmpty) {
@@ -619,28 +508,7 @@ class _AdminPanelPageState extends State<AdminPanelPage> with SingleTickerProvid
   // Construir pestaña de encuestas
   Widget _buildEncuestasTab() {
     if (_plantillas.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.quiz_outlined, size: 70, color: Colors.grey[300]),
-            const SizedBox(height: 15),
-            const Text(
-              'No hay plantillas de encuestas creadas',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton.icon(
-              onPressed: _mostrarCrearEncuestaDialog,
-              icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text('Crear Primera Encuesta', style: TextStyle(color: Colors.white)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryColor,
-              ),
-            )
-          ],
-        ),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     return ListView.builder(
@@ -711,13 +579,6 @@ class _AdminPanelPageState extends State<AdminPanelPage> with SingleTickerProvid
                     label: const Text('Gestionar Preguntas'),
                     style: TextButton.styleFrom(foregroundColor: AppColors.primaryColor),
                   ),
-                  const SizedBox(width: 8),
-                  TextButton.icon(
-                    onPressed: () => _confirmarEliminarEncuesta(survey),
-                    icon: const Icon(Icons.delete_outline, color: AppColors.errorColor),
-                    label: const Text('Eliminar'),
-                    style: TextButton.styleFrom(foregroundColor: AppColors.errorColor),
-                  ),
                 ],
               )
             ],
@@ -767,7 +628,15 @@ class _AdminPanelPageState extends State<AdminPanelPage> with SingleTickerProvid
           if (_tabController.index == 0) {
             _mostrarCrearUsuarioDialog();
           } else {
-            _mostrarCrearEncuestaDialog();
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const AdminEncuestaEditorPage(
+                  encuestaId: 'encuesta_general',
+                  encuestaTitulo: 'Encuesta de Visita',
+                ),
+              ),
+            ).then((_) => _loadData());
           }
         },
         backgroundColor: AppColors.primaryColor,

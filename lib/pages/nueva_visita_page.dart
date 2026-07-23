@@ -130,7 +130,7 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
       // Guardar preguntas asociadas
       final preguntas = await _db.getPreguntasByEncuestaId(_encuestaSeleccionada!['id']);
       final questionsJson = preguntas.map((p) => {
-        'id': p['id'],
+        'id': p['server_id'] ?? p['id'],
         'description': p['descripcion'],
         'question_type': p['tipo'],
         'is_required': p['es_requerida'] == 1,

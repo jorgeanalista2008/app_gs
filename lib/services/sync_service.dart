@@ -239,8 +239,23 @@ class SyncService {
           descripcion: 'Cuestionario general de visitas a clientes',
         );
 
+        final db = await _db.database;
         for (var pregunta in preguntas) {
           final id = pregunta['id']?.toString() ?? '';
+
+          // Evitar duplicados: si ya existe localmente una pregunta con este
+          // server_id (p. ej. creada offline por un admin y ya sincronizada),
+          // no se vuelve a insertar bajo el id numérico del servidor.
+          final yaExiste = await db.query(
+            'preguntas',
+            where: 'id = ? OR server_id = ?',
+            whereArgs: [id, id],
+            limit: 1,
+          );
+          if (yaExiste.isNotEmpty && yaExiste.first['id'] != id) {
+            continue;
+          }
+
           final descripcion = pregunta['description']?.toString() ?? '';
           final tipo = pregunta['question_type']?.toString() ?? 'TEXT';
           final esRequerida = (pregunta['is_required'] == true || pregunta['is_required'] == 1) ? 1 : 0;
@@ -265,6 +280,8 @@ class SyncService {
             esRequerida: esRequerida,
             opciones: opcionesStr,
             orden: orden,
+            serverId: id,
+            sincronizado: 1,
           );
         }
         preguntasDescargadas = preguntas.length;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../services/database_helper.dart';
+import '../repositories/pregunta_repository.dart';
 import '../models/pregunta_model.dart';
 
 class AdminEncuestaEditorPage extends StatefulWidget {
@@ -19,6 +20,7 @@ class AdminEncuestaEditorPage extends StatefulWidget {
 
 class _AdminEncuestaEditorPageState extends State<AdminEncuestaEditorPage> {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
+  final PreguntaRepository _preguntaRepo = PreguntaRepository();
 
   List<Map<String, dynamic>> _preguntas = [];
   String _encuestaDesc = '';
@@ -119,7 +121,7 @@ class _AdminEncuestaEditorPageState extends State<AdminEncuestaEditorPage> {
   // Eliminar pregunta
   Future<void> _eliminarPregunta(String id) async {
     try {
-      await _dbHelper.eliminarPreguntaTemplate(id);
+      await _preguntaRepo.eliminarPregunta(id);
       _loadPreguntas();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -247,15 +249,13 @@ class _AdminEncuestaEditorPageState extends State<AdminEncuestaEditorPage> {
                 ElevatedButton(
                   onPressed: () async {
                     if (formKey.currentState!.validate()) {
-                      final newId = 'preg_${DateTime.now().microsecondsSinceEpoch}';
                       final nextOrder = _preguntas.length;
 
-                      await _dbHelper.guardarPreguntaTemplate(
-                        id: newId,
+                      await _preguntaRepo.crearPregunta(
                         encuestaId: widget.encuestaId,
                         descripcion: descController.text.trim(),
                         tipo: selectedType,
-                        esRequerida: isRequired ? 1 : 0,
+                        esRequerida: isRequired,
                         opciones: selectedType == 'MULTIPLE_CHOICE' ? optionsController.text.trim() : null,
                         orden: nextOrder,
                       );

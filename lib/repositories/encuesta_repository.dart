@@ -56,10 +56,13 @@ class EncuestaRepository {
         final responseOptions = opcionesStr.isNotEmpty
             ? PreguntaOption.parseOptions(opcionesStr)
             : null;
-            
+        final effectiveId = p['server_id']?.toString().isNotEmpty == true
+            ? p['server_id'].toString()
+            : (p['id']?.toString() ?? '');
+
         return PreguntaModel(
-          id: p['id']?.toString() ?? '',
-          code: p['id']?.toString() ?? '',
+          id: effectiveId,
+          code: effectiveId,
           description: p['descripcion']?.toString() ?? '',
           questionType: p['tipo']?.toString() ?? 'TEXT',
           isRequired: p['es_requerida'] == 1,

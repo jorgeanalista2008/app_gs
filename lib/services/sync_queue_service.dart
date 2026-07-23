@@ -92,9 +92,12 @@ class SyncQueueService {
   /// Inicia drain automático: dispara cuando vuelve la red + timer cada 2 min.
   void start() {
     _connSub ??= _connectivity.onConnectivityChanged.listen((result) {
-      final online = result == ConnectivityResult.mobile ||
-          result == ConnectivityResult.wifi ||
-          result == ConnectivityResult.ethernet;
+      // Igual que ConnectivityService.isConnected(): cualquier resultado
+      // distinto de `none` cuenta como online (vpn/bluetooth/other también
+      // son conexiones reales en dispositivos con VPN o DNS privado). Antes
+      // solo se reconocían mobile/wifi/ethernet, así que el auto-sync nunca
+      // se disparaba al reconectar en esos dispositivos.
+      final online = result != ConnectivityResult.none;
       if (online) {
         print('🔄 [SyncQueue] red recuperada → ejecutarSincronizacionCompleta');
         SyncService.instance.ejecutarSincronizacionCompleta();
