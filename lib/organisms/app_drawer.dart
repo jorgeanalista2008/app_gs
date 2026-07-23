@@ -7,6 +7,7 @@ import '../pages/catalogo_page.dart';
 import '../pages/visitas_page.dart';
 import '../pages/admin_panel_page.dart';
 import '../pages/mapa_clientes_page.dart';
+import '../pages/crear_pregunta_page.dart';
 
 class AppDrawer extends StatelessWidget {
   final String userName;
@@ -30,6 +31,8 @@ class AppDrawer extends StatelessWidget {
     switch (role?.toLowerCase()) {
       case 'admin':
         return 'Administrador';
+      case 'vendedor_foraneo':
+        return 'Vendedor Foráneo';
       case 'vendedor':
       default:
         return 'Vendedor';
@@ -37,7 +40,10 @@ class AppDrawer extends StatelessWidget {
   }
 
   bool _isAdmin(String? role) => role?.toLowerCase() == 'admin';
-  bool _isVendedor(String? role) => role?.toLowerCase() == 'vendedor';
+  bool _isVendedor(String? role) {
+    final r = role?.toLowerCase();
+    return r == 'vendedor' || r == 'vendedor_foraneo';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -127,6 +133,21 @@ class AppDrawer extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const MapaClientesPage()),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.add_task, color: Colors.deepPurple),
+              title: const Text('Crear Pregunta'),
+              subtitle: const Text(
+                'Añade preguntas a la encuesta (offline)',
+                style: TextStyle(fontSize: 11),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const CrearPreguntaPage()),
                 );
               },
             ),

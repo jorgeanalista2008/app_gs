@@ -253,6 +253,46 @@ Future<bool> tieneRespuestas(String visitId) async {
     }
   }
 
+  /// Crea una pregunta localmente (offline) que será enviada al servidor en
+  /// la próxima sincronización. Retorna el id local (uuid).
+  Future<String> crearPreguntaOffline({
+    required String descripcion,
+    required String tipo,
+    bool esRequerida = false,
+    List<String>? opciones,
+    int orden = 100,
+  }) async {
+    final localId = 'v_${DateTime.now().microsecondsSinceEpoch}';
+    final opcionesJson = (opciones != null && opciones.isNotEmpty)
+        ? jsonEncode(opciones)
+        : null;
+
+    await _db.guardarPreguntaTemplate(
+      id: localId,
+      encuestaId: 'encuesta_general',
+      descripcion: descripcion,
+      tipo: tipo,
+      esRequerida: esRequerida ? 1 : 0,
+      opciones: opcionesJson,
+      orden: orden,
+      serverId: null,
+      sincronizado: 0,
+    );
+
+    return localId;
+  }
+
+  /// Lista todas las preguntas locales (incluye pendientes de push y ya sync)
+  Future<List<Map<String, dynamic>>> listarPreguntas() async {
+    final db = await _db.database;
+    return await db.query(
+      'preguntas',
+      where: 'encuesta_id = ?',
+      whereArgs: ['encuesta_general'],
+      orderBy: 'orden ASC, updated_at DESC',
+    );
+  }
+
   /// Obtiene estadísticas de encuestas
   Future<Map<String, int>> getEstadisticas() async {
     try {

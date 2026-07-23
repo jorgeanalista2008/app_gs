@@ -11,7 +11,11 @@ class AuthState {
   String? get userName => currentUser?['full_name']?.toString();
   String? get userRole => currentUser?['role']?.toString();
   bool get isAdmin => userRole?.toLowerCase() == 'admin';
-  bool get isVendedor => userRole?.toLowerCase() == 'vendedor';
+  bool get isVendedor {
+    final r = userRole?.toLowerCase();
+    return r == 'vendedor' || r == 'vendedor_foraneo';
+  }
+  bool get isForaneo => userRole?.toLowerCase() == 'vendedor_foraneo';
 }
 
 class AuthNotifier extends StateNotifier<AuthState> {

@@ -340,7 +340,12 @@ class SyncService {
         print('❌ No hay credenciales para sincronizar');
         return {'marcadas': 0, 'errores': 1};
       }
-      
+
+      // 0. Subir preguntas creadas offline por el vendedor ANTES de las visitas.
+      // Así, cuando la visita se sincronice, las respuestas apunten al server_id
+      // real de la pregunta (no al uuid local).
+      await _pushPreguntasPendientes(email: username, password: pass);
+
       // Auto-reparar cualquier visita completada que tenga respuestas pendientes de sincronización
       await db.rawUpdate('''
         UPDATE visitas 
@@ -552,6 +557,97 @@ class SyncService {
       return true;
     } catch (e) {
       return false;
+    }
+  }
+
+  /// Sube al backend las preguntas creadas offline por el vendedor.
+  /// Cada una se envía a `/salesperson/auth/questions`, endpoint idempotente
+  /// por `code` (retorna id existente si ya estaba). Al recibir server_id,
+  /// se guarda localmente y se marca sincronizada, y se remapean las respuestas
+  /// pendientes que apuntaban al uuid local.
+  Future<void> _pushPreguntasPendientes({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final pendientes = await _db.getPreguntasPendientesPush();
+      if (pendientes.isEmpty) return;
+      print('📤 ${pendientes.length} preguntas locales pendientes de push');
+
+      final db = await _db.database;
+
+      for (final p in pendientes) {
+        final localId = p['id']?.toString() ?? '';
+        final descripcion = p['descripcion']?.toString() ?? '';
+        final tipo = p['tipo']?.toString() ?? 'TEXT';
+        final esRequerida = (p['es_requerida'] == 1);
+        final opcionesRaw = p['opciones']?.toString();
+        final orden = (p['orden'] as int?) ?? 100;
+
+        // Sanear tipo: RATING queda restringido al admin
+        final tipoNorm = (tipo == 'RATING') ? 'TEXT' : tipo;
+
+        // Derivar un code determinístico a partir del uuid local para
+        // idempotencia. Truncado + upper para respetar 50 chars max backend.
+        final code = 'V_${localId.replaceAll('-', '').substring(0, 20).toUpperCase()}';
+
+        List<String>? opciones;
+        if (opcionesRaw != null && opcionesRaw.isNotEmpty) {
+          try {
+            final decoded = jsonDecode(opcionesRaw);
+            if (decoded is List) {
+              opciones = decoded.map((e) => e.toString()).toList();
+            }
+          } catch (_) {}
+        }
+
+        final body = <String, dynamic>{
+          'email': email,
+          'password': password,
+          'code': code,
+          'description': descripcion,
+          'question_type': tipoNorm,
+          'is_required': esRequerida,
+          if (opciones != null && opciones.isNotEmpty) 'response_options': opciones,
+          'sort_order': orden,
+        };
+
+        try {
+          final resp = await GenericRepository.instance
+              .postOnline<Map<String, dynamic>>(
+            path: '/salesperson/auth/questions',
+            body: body,
+            fromJson: (json) => json,
+          );
+          final serverId = resp?['id']?.toString();
+          if (serverId == null) {
+            print('⚠️ Respuesta sin id para pregunta local $localId: $resp');
+            continue;
+          }
+
+          await _db.marcarPreguntaSincronizada(localId, serverId);
+
+          // Remapear respuestas ya guardadas que aún referencien el uuid local.
+          await db.rawUpdate(
+            '''UPDATE respuestas_pendientes
+               SET respuestas_json = REPLACE(respuestas_json, ?, ?)
+               WHERE respuestas_json LIKE ?''',
+            [
+              '"question_id":"$localId"',
+              '"question_id":"$serverId"',
+              '%"question_id":"$localId"%',
+            ],
+          );
+
+          print(
+            '✅ Pregunta local $localId → server $serverId (reused=${resp?['reused']})',
+          );
+        } catch (e) {
+          print('❌ Error subiendo pregunta local $localId: $e');
+        }
+      }
+    } catch (e) {
+      print('❌ Error en _pushPreguntasPendientes: $e');
     }
   }
 

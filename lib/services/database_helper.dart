@@ -922,6 +922,17 @@ class DatabaseHelper {
     );
   }
 
+  /// Devuelve preguntas creadas por el vendedor localmente que aún no fueron
+  /// enviadas al servidor (sincronizado = 0 y server_id nulo).
+  Future<List<Map<String, dynamic>>> getPreguntasPendientesPush() async {
+    final db = await database;
+    return await db.query(
+      'preguntas',
+      where: 'sincronizado = 0 AND (server_id IS NULL OR server_id = \'\')',
+      orderBy: 'orden ASC, updated_at ASC',
+    );
+  }
+
   /// Elimina una pregunta de una plantilla
   Future<void> eliminarPreguntaTemplate(String id) async {
     final db = await database;

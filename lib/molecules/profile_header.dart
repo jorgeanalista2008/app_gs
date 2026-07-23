@@ -20,6 +20,8 @@ class ProfileHeader extends StatelessWidget {
       case 'superadmin':
       case 'admin':
         return 'Administrador';
+      case 'vendedor_foraneo':
+        return 'Vendedor Foráneo';
       case '2':
       case 'vendedor':
       default:

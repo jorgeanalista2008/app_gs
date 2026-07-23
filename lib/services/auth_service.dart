@@ -22,7 +22,12 @@ class AuthService {
   Map<String, dynamic>? get currentUser => _currentUser;
   bool get isLoggedIn => _currentUser != null;
   bool get isAdmin => _currentUser?['role'] == 'admin';
-  bool get isVendedor => _currentUser?['role'] == 'vendedor';
+  // Ambos vendedor y vendedor_foraneo usan la app con las mismas features
+  // (visitas, clientes, prospectos). El foraneo se distingue vía isForaneo.
+  bool get isVendedor =>
+      _currentUser?['role'] == 'vendedor' ||
+      _currentUser?['role'] == 'vendedor_foraneo';
+  bool get isForaneo => _currentUser?['role'] == 'vendedor_foraneo';
   String? get userId => _currentUser?['id']?.toString();
   String? get userName => _currentUser?['full_name']?.toString();
   String? get userRole => _currentUser?['role']?.toString();
@@ -51,10 +56,17 @@ class AuthService {
             final userId = userMap['id']?.toString() ?? '';
             final fullName = userMap['full_name']?.toString() ?? '';
             // El backend nombra el rol de administrador "Administrador" (no "admin"),
-            // así que se normaliza por contenido en vez de comparar el string exacto,
-            // o isAdmin/isVendedor nunca coinciden y se ocultan menús según el rol.
+            // así que se normaliza por contenido. "Vendedor Foraneo" se preserva
+            // como 'vendedor_foraneo' para distinguirlo del vendedor normal.
             final rawRole = userMap['role']?['name']?.toString().toLowerCase() ?? 'vendedor';
-            final role = rawRole.contains('admin') ? 'admin' : 'vendedor';
+            String role;
+            if (rawRole.contains('admin')) {
+              role = 'admin';
+            } else if (rawRole.contains('foraneo') || rawRole.contains('foráneo')) {
+              role = 'vendedor_foraneo';
+            } else {
+              role = 'vendedor';
+            }
             final tenantId = userMap['tenant_id']?.toString();
             final companyId = userMap['company_id']?.toString() ?? userMap['tenant_id']?.toString();
             final branchId = userMap['branch_id']?.toString();
