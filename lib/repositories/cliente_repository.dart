@@ -364,6 +364,8 @@ class ClienteRepository {
             'direccion': cliente.direccion,
             'activo': cliente.activo ? 1 : 0,
             'tipo': cliente.tipo,
+            'lat': cliente.lat,
+            'lng': cliente.lng,
             'sincronizado': 1,
             'fecha_sync': DateTime.now().toIso8601String(),
           });
@@ -371,6 +373,10 @@ class ClienteRepository {
         } else {
           final localRow = existente.first;
           final localId = localRow['id'] as String;
+          // Preservar lat/lng local si el vendedor las ajustó manualmente.
+          // Solo actualizar cuando backend trae valor y local está vacío.
+          final localLat = localRow['lat'];
+          final localLng = localRow['lng'];
           await db.update(
             'clientes',
             {
@@ -383,6 +389,8 @@ class ClienteRepository {
               'direccion': cliente.direccion,
               'activo': cliente.activo ? 1 : 0,
               'tipo': cliente.tipo,
+              if (localLat == null && cliente.lat != null) 'lat': cliente.lat,
+              if (localLng == null && cliente.lng != null) 'lng': cliente.lng,
               'sincronizado': 1,
               'is_prospect': 0, // Ya se oficializó en el backend
               'fecha_sync': DateTime.now().toIso8601String(),

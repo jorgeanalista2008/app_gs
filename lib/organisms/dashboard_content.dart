@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../core/env.dart';
 import '../core/app_colors.dart';
 import '../molecules/stat_card.dart';
-import '../molecules/dolar_indicator.dart';
-import '../models/dolar_model.dart';
 import '../services/database_helper.dart';
 import '../services/auth_service.dart';
 import '../services/connectivity_service.dart';
@@ -42,8 +41,10 @@ class _DashboardContentState extends State<DashboardContent> {
   int _visitasHoy = 0;
   bool _isLoading = true;
 
-  // Dólar (solo vendedor)
-  Map<String, dynamic>? dolarData;
+  // Tasas BCV (solo vendedor): USD y EUR
+  double? _tasaUsd;
+  double? _tasaEur;
+  String? _tasaFecha;
 
   @override
   void initState() {
@@ -64,7 +65,7 @@ class _DashboardContentState extends State<DashboardContent> {
         // Intentar sincronizar clientes con backend (no bloquea si offline).
         await _sincronizarClientesSiOnline();
         await _loadVendedorStats(db);
-        _fetchDolares();
+        _fetchTasasBcv();
       }
 
       if (mounted) setState(() => _isLoading = false);
@@ -152,19 +153,37 @@ class _DashboardContentState extends State<DashboardContent> {
     _visitasHoy = (visitasHoyRows.first['total'] as int?) ?? 0;
   }
 
-  Future<void> _fetchDolares() async {
+  /// Trae tasas oficiales BCV (USD y EUR) desde backend Solsumed.
+  /// Silencioso: si falla no rompe dashboard, simplemente no muestra tarjeta.
+  Future<void> _fetchTasasBcv() async {
     try {
-      final response = await http.get(Uri.parse('https://ve.dolarapi.com/v1/dolares'));
-      if (response.statusCode == 200) {
-        List<dynamic> jsonList = jsonDecode(response.body);
-        setState(() {
-          dolarData = {
-            'bcv': jsonList.firstWhere((e) => e['fuente'] == 'oficial', orElse: () => {}),
-            'usdt': jsonList.firstWhere((e) => e['fuente'] == 'paralelo', orElse: () => {}),
-          };
-        });
+      final results = await Future.wait([
+        http.get(Uri.parse('${Env.apiBaseUrl}/currency-s/latest/USD')),
+        http.get(Uri.parse('${Env.apiBaseUrl}/currency-s/latest/EUR')),
+      ]);
+      double? usd;
+      double? eur;
+      String? fecha;
+      for (var i = 0; i < results.length; i++) {
+        final r = results[i];
+        if (r.statusCode != 200) continue;
+        final body = jsonDecode(r.body);
+        final data = body is Map ? body['data'] : null;
+        if (data is Map) {
+          final rate = data['daily_rate'];
+          final val = rate is num ? rate.toDouble() : double.tryParse(rate?.toString() ?? '');
+          if (i == 0) usd = val;
+          if (i == 1) eur = val;
+          fecha ??= data['rate_date']?.toString();
+        }
       }
-    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _tasaUsd = usd;
+        _tasaEur = eur;
+        _tasaFecha = fecha;
+      });
+    } catch (_) {
       // Silencioso
     }
   }
@@ -419,27 +438,29 @@ class _DashboardContentState extends State<DashboardContent> {
             ),
             const SizedBox(height: 20),
 
-            // ─── Dólar (paleta Solsumed) ───
-            if (dolarData != null &&
-                (dolarData!['bcv']?.isNotEmpty ?? false) &&
-                (dolarData!['usdt']?.isNotEmpty ?? false))
+            // ─── Tasas BCV (USD + EUR) ───
+            if (_tasaUsd != null || _tasaEur != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 20),
                 child: Row(
                   children: [
                     Expanded(
-                      child: DolarIndicator(
-                        title: "Dólar BCV",
-                        dolar: DolarModel.fromJson(dolarData!['bcv'] as Map<String, dynamic>),
-                        backgroundColor: AppColors.primaryColor,
+                      child: _tasaCard(
+                        titulo: 'Dólar BCV',
+                        moneda: 'USD',
+                        simbolo: '\$',
+                        rate: _tasaUsd,
+                        color: AppColors.primaryColor,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: DolarIndicator(
-                        title: "USDT Paralelo",
-                        dolar: DolarModel.fromJson(dolarData!['usdt'] as Map<String, dynamic>),
-                        backgroundColor: AppColors.secondaryColor,
+                      child: _tasaCard(
+                        titulo: 'Euro BCV',
+                        moneda: 'EUR',
+                        simbolo: '€',
+                        rate: _tasaEur,
+                        color: AppColors.secondaryColor,
                       ),
                     ),
                   ],
@@ -542,6 +563,115 @@ class _DashboardContentState extends State<DashboardContent> {
             const SizedBox(height: 24),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _tasaCard({
+    required String titulo,
+    required String moneda,
+    required String simbolo,
+    required double? rate,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [color, color.withValues(alpha: 0.78)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.25),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.22),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  moneda,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              const Icon(Icons.trending_up_rounded, color: Colors.white, size: 16),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            titulo,
+            style: const TextStyle(
+              fontSize: 11,
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                simbolo,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(width: 3),
+              Text(
+                rate != null ? rate.toStringAsFixed(2) : '—',
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                  height: 1.0,
+                ),
+              ),
+              const SizedBox(width: 3),
+              const Padding(
+                padding: EdgeInsets.only(bottom: 3),
+                child: Text(
+                  'Bs',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_tasaFecha != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Al $_tasaFecha',
+              style: TextStyle(
+                fontSize: 9,
+                color: Colors.white.withValues(alpha: 0.85),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

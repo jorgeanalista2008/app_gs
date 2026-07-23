@@ -1,8 +1,10 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../models/cliente_model.dart';
 import '../repositories/cliente_repository.dart';
 import '../services/auth_service.dart';
+import '../services/location_service.dart';
 import '../atoms/app_button.dart';
 import '../atoms/app_text_field.dart';
 import 'nuevo_prospecto_page.dart';
@@ -30,6 +32,13 @@ class _ClientesPageState extends State<ClientesPage>
   List<ClienteModel> _clientesFiltrados = [];
   bool _isLoading = true;
   String? _error;
+
+  // "Cerca de mí": si activo ordena la lista por distancia y muestra badge km.
+  bool _cercaDeMiActivo = false;
+  double? _miLat;
+  double? _miLng;
+  bool _obteniendoGps = false;
+  final Map<String, double> _distanciasKm = {};
 
   @override
   void initState() {
@@ -96,18 +105,89 @@ class _ClientesPageState extends State<ClientesPage>
   void _aplicarFiltro() {
     final base = _tabController.index == 0 ? _clientes : _prospectos;
     final query = _searchController.text.trim().toLowerCase();
-    setState(() {
-      if (query.isEmpty) {
-        _clientesFiltrados = base;
-      } else {
-        _clientesFiltrados = base.where((c) {
-          return c.name.toLowerCase().contains(query) ||
-              c.codeClientProfit.toLowerCase().contains(query) ||
-              c.taxId.toLowerCase().contains(query) ||
-              c.telefono.contains(query);
-        }).toList();
+    List<ClienteModel> lista;
+    if (query.isEmpty) {
+      lista = List.of(base);
+    } else {
+      lista = base.where((c) {
+        return c.name.toLowerCase().contains(query) ||
+            c.codeClientProfit.toLowerCase().contains(query) ||
+            c.taxId.toLowerCase().contains(query) ||
+            c.telefono.contains(query);
+      }).toList();
+    }
+
+    if (_cercaDeMiActivo && _miLat != null && _miLng != null) {
+      _distanciasKm.clear();
+      for (final c in lista) {
+        if (c.lat != null && c.lng != null) {
+          _distanciasKm[c.id] = _distanciaKm(_miLat!, _miLng!, c.lat!, c.lng!);
+        }
       }
-    });
+      lista.sort((a, b) {
+        final da = _distanciasKm[a.id] ?? double.infinity;
+        final db = _distanciasKm[b.id] ?? double.infinity;
+        return da.compareTo(db);
+      });
+    }
+
+    setState(() => _clientesFiltrados = lista);
+  }
+
+  /// Haversine — distancia en km entre 2 coords GPS.
+  double _distanciaKm(double lat1, double lng1, double lat2, double lng2) {
+    const r = 6371.0; // radio Tierra km
+    final dLat = _deg2rad(lat2 - lat1);
+    final dLng = _deg2rad(lng2 - lng1);
+    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_deg2rad(lat1)) *
+            math.cos(_deg2rad(lat2)) *
+            math.sin(dLng / 2) *
+            math.sin(dLng / 2);
+    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    return r * c;
+  }
+
+  double _deg2rad(double deg) => deg * (math.pi / 180);
+
+  String _formatearDistancia(double km) {
+    if (km < 1) return '${(km * 1000).round()} m';
+    if (km < 10) return '${km.toStringAsFixed(1)} km';
+    return '${km.round()} km';
+  }
+
+  Future<void> _toggleCercaDeMi() async {
+    if (_cercaDeMiActivo) {
+      setState(() {
+        _cercaDeMiActivo = false;
+        _distanciasKm.clear();
+      });
+      _aplicarFiltro();
+      return;
+    }
+    setState(() => _obteniendoGps = true);
+    try {
+      final pos = await LocationService.getCurrentLocation();
+      if (pos == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No se pudo obtener tu ubicación'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+      if (!mounted) return;
+      setState(() {
+        _miLat = pos.latitude;
+        _miLng = pos.longitude;
+        _cercaDeMiActivo = true;
+      });
+      _aplicarFiltro();
+    } finally {
+      if (mounted) setState(() => _obteniendoGps = false);
+    }
   }
 
   Future<void> _abrirNuevoProspecto() async {
@@ -147,8 +227,24 @@ class _ClientesPageState extends State<ClientesPage>
             Tab(text: 'Prospectos (${_prospectos.length})'),
           ],
         ),
-        actions: const [
-          Padding(
+        actions: [
+          IconButton(
+            tooltip: _cercaDeMiActivo
+                ? 'Quitar orden por cercanía'
+                : 'Ordenar por cercanía a mi ubicación',
+            icon: _obteniendoGps
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                  )
+                : Icon(
+                    _cercaDeMiActivo ? Icons.near_me : Icons.near_me_outlined,
+                    color: Colors.white,
+                  ),
+            onPressed: _obteniendoGps ? null : _toggleCercaDeMi,
+          ),
+          const Padding(
             padding: EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
             child: SyncStatusChip(),
           ),
@@ -302,6 +398,25 @@ class _ClientesPageState extends State<ClientesPage>
                       Text('Cód: ${cliente.codeClientProfit}', style: TextStyle(fontSize: 13, color: Colors.grey[600])),
                     if (cliente.taxId.isNotEmpty)
                       Text('RIF: ${cliente.taxId}', style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+                    if (_cercaDeMiActivo && _distanciasKm.containsKey(cliente.id))
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.near_me, size: 12, color: AppColors.primaryColor),
+                            const SizedBox(width: 3),
+                            Text(
+                              _formatearDistancia(_distanciasKm[cliente.id]!),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primaryColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                   ],
                 ),
               ),

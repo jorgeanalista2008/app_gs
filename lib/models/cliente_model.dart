@@ -21,6 +21,10 @@ class ClienteModel {
   final String? photo1;
   final String? photo2;
 
+  // Coordenadas GPS del punto de venta
+  final double? lat;
+  final double? lng;
+
   ClienteModel({
     required this.id,
     required this.name,
@@ -41,6 +45,8 @@ class ClienteModel {
     this.nextFollowupDate,
     this.photo1,
     this.photo2,
+    this.lat,
+    this.lng,
   });
 
   factory ClienteModel.fromJson(Map<String, dynamic> json) {
@@ -66,7 +72,16 @@ class ClienteModel {
       nextFollowupDate: json['next_followup_date']?.toString(),
       photo1: json['photo_1']?.toString(),
       photo2: json['photo_2']?.toString(),
+      lat: _parseDouble(json['lat'] ?? json['latitude']),
+      lng: _parseDouble(json['lng'] ?? json['longitude']),
     );
+  }
+
+  static double? _parseDouble(dynamic v) {
+    if (v == null) return null;
+    if (v is double) return v;
+    if (v is int) return v.toDouble();
+    return double.tryParse(v.toString());
   }
 
   Map<String, dynamic> toJson() => {

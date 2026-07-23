@@ -4,6 +4,7 @@ import '../organisms/app_drawer.dart';
 import '../organisms/dashboard_content.dart';
 import '../services/auth_service.dart';
 import 'login_page.dart';
+import 'busqueda_global_page.dart';
 import '../atoms/sync_status_chip.dart';
 import '../organisms/connection_wrapper.dart';
 import '../services/sync_service.dart';
@@ -117,8 +118,18 @@ class _HomePageState extends State<HomePage> {
         title: const Text('Inicio'),
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
-        actions: const [
-          Padding(
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search_rounded),
+            tooltip: 'Buscar clientes, prospectos, visitas',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const BusquedaGlobalPage()),
+              );
+            },
+          ),
+          const Padding(
             padding: EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
             child: SyncStatusChip(),
           ),
