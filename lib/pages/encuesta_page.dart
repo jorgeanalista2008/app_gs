@@ -41,9 +41,11 @@ class _EncuestaPageState extends State<EncuestaPage> {
   // Respuestas
   final Map<String, dynamic> _respuestas = {};
 
-  // Fotos
-  String? _foto1Base64;
-  String? _foto2Base64;
+  // Fotos: guardamos el path local del archivo. Al sincronizar,
+  // ImageUploadService lee el binario y lo sube. Mantener la ruta en vez de
+  // base64 evita hinchar el SQLite con megabytes por respuesta.
+  String? _foto1Path;
+  String? _foto2Path;
 
   // Estado
   bool _isEnviando = false;
@@ -136,8 +138,8 @@ class _EncuestaPageState extends State<EncuestaPage> {
         respuestas: _respuestas,
         lat: _lat,
         lng: _lng,
-        foto1Path: _foto1Base64,
-        foto2Path: _foto2Base64,
+        foto1Path: _foto1Path,
+        foto2Path: _foto2Path,
       );
 
       if (mounted) {
@@ -414,8 +416,8 @@ class _EncuestaPageState extends State<EncuestaPage> {
             Expanded(
               child: PhotoCaptureWidget(
                 label: 'Foto del local',
-                onPhotoTaken: (_, base64) {
-                  _foto1Base64 = base64;
+                onPhotoTaken: (file, _) {
+                  _foto1Path = file?.path;
                 },
               ),
             ),
@@ -423,8 +425,8 @@ class _EncuestaPageState extends State<EncuestaPage> {
             Expanded(
               child: PhotoCaptureWidget(
                 label: 'Foto adicional',
-                onPhotoTaken: (_, base64) {
-                  _foto2Base64 = base64;
+                onPhotoTaken: (file, _) {
+                  _foto2Path = file?.path;
                 },
               ),
             ),

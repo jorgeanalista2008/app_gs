@@ -29,8 +29,8 @@ class _NuevoProspectoPageState extends State<NuevoProspectoPage> {
   bool _saving = false;
   bool _fetchingGps = false;
   DateTime? _nextFollowupDate;
-  String? _photo1Base64;
-  String? _photo2Base64;
+  String? _photo1Path;
+  String? _photo2Path;
   String? _selectedZoneCode;
   String? _selectedCity;
 
@@ -157,8 +157,8 @@ class _NuevoProspectoPageState extends State<NuevoProspectoPage> {
         nextFollowupDate: _nextFollowupDate != null 
             ? "${_nextFollowupDate!.year}-${_nextFollowupDate!.month.toString().padLeft(2, '0')}-${_nextFollowupDate!.day.toString().padLeft(2, '0')}"
             : null,
-        photo1: _photo1Base64,
-        photo2: _photo2Base64,
+        photo1: _photo1Path,
+        photo2: _photo2Path,
       );
       if (!mounted) return;
       _showSnack('✅ Prospecto guardado. Se subirá al recuperar conexión.');
@@ -327,8 +327,8 @@ class _NuevoProspectoPageState extends State<NuevoProspectoPage> {
                   Expanded(
                     child: PhotoCaptureWidget(
                       label: 'Foto del local',
-                      onPhotoTaken: (file, base64) {
-                        _photo1Base64 = base64;
+                      onPhotoTaken: (file, _) {
+                        _photo1Path = file?.path;
                       },
                     ),
                   ),
@@ -336,8 +336,8 @@ class _NuevoProspectoPageState extends State<NuevoProspectoPage> {
                   Expanded(
                     child: PhotoCaptureWidget(
                       label: 'Foto adicional',
-                      onPhotoTaken: (file, base64) {
-                        _photo2Base64 = base64;
+                      onPhotoTaken: (file, _) {
+                        _photo2Path = file?.path;
                       },
                     ),
                   ),

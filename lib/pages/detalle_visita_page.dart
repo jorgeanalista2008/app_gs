@@ -1,10 +1,25 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../models/visita_model.dart';
 import '../repositories/encuesta_repository.dart';
 import '../services/database_helper.dart';
 import '../models/pregunta_model.dart';
+
+bool _looksLikeFilePath(String raw) =>
+    raw.startsWith('/') || raw.startsWith('file:') || (raw.length > 2 && raw[1] == ':');
+
+Widget _imageFromRaw(String raw, {required BoxFit fit}) {
+  if (_looksLikeFilePath(raw)) {
+    final path = raw.startsWith('file:') ? Uri.parse(raw).toFilePath() : raw;
+    return Image.file(File(path), fit: fit);
+  }
+  final normalized = raw.startsWith('data:')
+      ? raw.split(',').last
+      : raw.replaceAll(RegExp(r'\s'), '');
+  return Image.memory(base64Decode(normalized), fit: fit);
+}
 
 class DetalleVisitaPage extends StatefulWidget {
   final VisitaModel visita;
@@ -21,8 +36,8 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
   List<dynamic> _respuestas = [];
   double? _lat;
   double? _lng;
-  String? _foto1Base64;
-  String? _foto2Base64;
+  String? _foto1Raw;
+  String? _foto2Raw;
   final Map<String, List<PreguntaOption>> _preguntasOpciones = {};
 
   @override
@@ -51,8 +66,8 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
         }
         _lat = row['lat'] as double?;
         _lng = row['lng'] as double?;
-        _foto1Base64 = row['foto1_path'] as String?;
-        _foto2Base64 = row['foto2_path'] as String?;
+        _foto1Raw = row['foto1_path'] as String?;
+        _foto2Raw = row['foto2_path'] as String?;
       }
     } catch (e) {
       debugPrint('Error cargando detalle de visita: $e');
@@ -74,7 +89,7 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
     }
   }
 
-  void _verImagenCompleta(String base64Image, String titulo) {
+  void _verImagenCompleta(String rawImage, String titulo) {
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -97,10 +112,7 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
                 bottomLeft: Radius.circular(16),
                 bottomRight: Radius.circular(16),
               ),
-              child: Image.memory(
-                base64Decode(base64Image),
-                fit: BoxFit.contain,
-              ),
+              child: _imageFromRaw(rawImage, fit: BoxFit.contain),
             ),
           ],
         ),
@@ -108,9 +120,9 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
     );
   }
 
-  Widget _buildPhotoThumbnail(String base64Image, String label) {
+  Widget _buildPhotoThumbnail(String rawImage, String label) {
     return GestureDetector(
-      onTap: () => _verImagenCompleta(base64Image, label),
+      onTap: () => _verImagenCompleta(rawImage, label),
       child: Column(
         children: [
           Container(
@@ -129,10 +141,7 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(11),
-              child: Image.memory(
-                base64Decode(base64Image),
-                fit: BoxFit.cover,
-              ),
+              child: _imageFromRaw(rawImage, fit: BoxFit.cover),
             ),
           ),
           const SizedBox(height: 6),
@@ -411,7 +420,7 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
                   const SizedBox(height: 16),
 
                   // UBICACIÓN Y FOTOS
-                  if ((_lat != null && _lng != null) || (_foto1Base64 != null || _foto2Base64 != null))
+                  if ((_lat != null && _lng != null) || (_foto1Raw != null || _foto2Raw != null))
                     Card(
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       elevation: 2,
@@ -444,14 +453,14 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
                               ),
                               const SizedBox(height: 16),
                             ],
-                            if (_foto1Base64 != null || _foto2Base64 != null)
+                            if (_foto1Raw != null || _foto2Raw != null)
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                                 children: [
-                                  if (_foto1Base64 != null)
-                                    _buildPhotoThumbnail(_foto1Base64!, 'Foto del Local'),
-                                  if (_foto2Base64 != null)
-                                    _buildPhotoThumbnail(_foto2Base64!, 'Foto Adicional'),
+                                  if (_foto1Raw != null)
+                                    _buildPhotoThumbnail(_foto1Raw!, 'Foto del Local'),
+                                  if (_foto2Raw != null)
+                                    _buildPhotoThumbnail(_foto2Raw!, 'Foto Adicional'),
                                 ],
                               ),
                           ],
