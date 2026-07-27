@@ -20,7 +20,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 10,
+      version: 12,
       onCreate: (db, version) async {
         await _createTables(db);
       },
@@ -76,6 +76,22 @@ class DatabaseHelper {
         if (oldVersion < 10) {
           try {
             await db.execute('ALTER TABLE preguntas ADD COLUMN server_id TEXT');
+          } catch (_) {}
+        }
+        if (oldVersion < 11) {
+          await _createUbicacionesTable(db);
+        }
+        if (oldVersion < 12) {
+          try {
+            await db.execute(
+                'ALTER TABLE ubicaciones ADD COLUMN lugar_visita INTEGER NOT NULL DEFAULT 0');
+          } catch (_) {}
+          try {
+            await db.execute('ALTER TABLE ubicaciones ADD COLUMN visit_id TEXT');
+          } catch (_) {}
+          try {
+            await db.execute(
+                'CREATE INDEX IF NOT EXISTS idx_ubicaciones_visit ON ubicaciones(visit_id, lugar_visita)');
           } catch (_) {}
         }
       },
@@ -221,6 +237,37 @@ class DatabaseHelper {
     await _createPendingOperationsTable(db);
     await _createSyncConflictsTable(db);
     await _createIdMappingTable(db);
+    await _createUbicacionesTable(db);
+  }
+
+  Future<void> _createUbicacionesTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ubicaciones (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        lat REAL NOT NULL,
+        lng REAL NOT NULL,
+        accuracy REAL,
+        altitude REAL,
+        speed REAL,
+        heading REAL,
+        recorded_at TEXT NOT NULL,
+        lugar_visita INTEGER NOT NULL DEFAULT 0,
+        visit_id TEXT,
+        sincronizado INTEGER NOT NULL DEFAULT 0,
+        server_id TEXT,
+        created_at TEXT NOT NULL
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_ubicaciones_user_time ON ubicaciones(user_id, recorded_at)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_ubicaciones_pend ON ubicaciones(sincronizado, recorded_at)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_ubicaciones_visit ON ubicaciones(visit_id, lugar_visita)',
+    );
   }
 
   /// Agrega columnas de sync timestamps a tablas existentes (migración v5→v6).
@@ -1009,5 +1056,74 @@ class DatabaseHelper {
       limit: 1,
     );
     return result.isEmpty ? null : result.first['server_id'] as String?;
+  }
+
+  // ═══════════════════════════════════════════
+  // UBICACIONES (tracking periódico)
+  // ═══════════════════════════════════════════
+
+  Future<int> insertarUbicacion({
+    required String id,
+    required String userId,
+    required double lat,
+    required double lng,
+    double? accuracy,
+    double? altitude,
+    double? speed,
+    double? heading,
+    required DateTime recordedAt,
+    bool lugarVisita = false,
+    String? visitId,
+  }) async {
+    final db = await database;
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+    return db.insert('ubicaciones', {
+      'id': id,
+      'user_id': userId,
+      'lat': lat,
+      'lng': lng,
+      'accuracy': accuracy,
+      'altitude': altitude,
+      'speed': speed,
+      'heading': heading,
+      'recorded_at': recordedAt.toUtc().toIso8601String(),
+      'lugar_visita': lugarVisita ? 1 : 0,
+      'visit_id': visitId,
+      'sincronizado': 0,
+      'created_at': nowIso,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<Map<String, dynamic>>> getUbicacionesPendientes({int limit = 100}) async {
+    final db = await database;
+    return db.query(
+      'ubicaciones',
+      where: 'sincronizado = 0',
+      orderBy: 'recorded_at ASC',
+      limit: limit,
+    );
+  }
+
+  Future<int> marcarUbicacionSincronizada(String id, {String? serverId}) async {
+    final db = await database;
+    return db.update(
+      'ubicaciones',
+      {
+        'sincronizado': 1,
+        if (serverId != null) 'server_id': serverId,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<int> eliminarUbicacionesSincronizadas({Duration olderThan = const Duration(days: 14)}) async {
+    final db = await database;
+    final threshold = DateTime.now().toUtc().subtract(olderThan).toIso8601String();
+    return db.delete(
+      'ubicaciones',
+      where: 'sincronizado = 1 AND recorded_at < ?',
+      whereArgs: [threshold],
+    );
   }
 }

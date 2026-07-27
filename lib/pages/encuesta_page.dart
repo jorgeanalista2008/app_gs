@@ -5,6 +5,7 @@ import '../models/encuesta_model.dart';
 import '../models/pregunta_model.dart';
 import '../repositories/encuesta_repository.dart';
 import '../services/location_service.dart';
+import '../services/location_tracking_service.dart';
 import '../services/database_helper.dart';
 import '../atoms/photo_capture_widget.dart';
 import '../atoms/app_button.dart';
@@ -55,6 +56,11 @@ class _EncuestaPageState extends State<EncuestaPage> {
     super.initState();
     _getCurrentLocation();
     _loadEncuesta();
+    // Marca el punto exacto de inicio de encuesta como lugar de visita.
+    LocationTrackingService.instance.registrarLugarVisita(
+      visitId: widget.visita.id,
+      note: 'encuesta_inicio',
+    );
   }
 
   Future<void> _getCurrentLocation() async {
@@ -418,6 +424,12 @@ class _EncuestaPageState extends State<EncuestaPage> {
                 label: 'Foto del local',
                 onPhotoTaken: (file, _) {
                   _foto1Path = file?.path;
+                  if (file != null) {
+                    LocationTrackingService.instance.registrarLugarVisita(
+                      visitId: widget.visita.id,
+                      note: 'foto_local',
+                    );
+                  }
                 },
               ),
             ),
@@ -427,6 +439,12 @@ class _EncuestaPageState extends State<EncuestaPage> {
                 label: 'Foto adicional',
                 onPhotoTaken: (file, _) {
                   _foto2Path = file?.path;
+                  if (file != null) {
+                    LocationTrackingService.instance.registrarLugarVisita(
+                      visitId: widget.visita.id,
+                      note: 'foto_adicional',
+                    );
+                  }
                 },
               ),
             ),

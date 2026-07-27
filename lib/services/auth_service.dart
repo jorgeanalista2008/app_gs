@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'database_helper.dart';
 import 'connectivity_service.dart';
+import 'location_tracking_service.dart';
 import '../repositories/generic_repository.dart';
 
 class AuthService {
@@ -110,6 +111,7 @@ class AuthService {
   }
 
   Future<void> logout() async {
+    await LocationTrackingService.instance.stop();
     _currentUser = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_userDataKey);

@@ -5,6 +5,7 @@ import 'services/connectivity_service.dart';
 import 'services/sync_queue_service.dart';
 import 'services/conflict_resolver.dart';
 import 'services/background_sync_service.dart';
+import 'services/location_tracking_service.dart';
 import 'repositories/cliente_repository.dart';
 import 'repositories/pregunta_repository.dart';
 import 'pages/login_page.dart';
@@ -22,6 +23,7 @@ void main() async {
   // Handlers de éxito para mapear server_id tras push.
   ClienteRepository.registerSyncHandlers();
   PreguntaRepository.registerSyncHandlers();
+  LocationTrackingService.registerSyncHandlers();
   SyncQueueService.instance.start();
   // Limpia operaciones exitosas viejas en background.
   SyncQueueService.instance.purgeOldSuccessful();

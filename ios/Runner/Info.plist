@@ -51,5 +51,12 @@
 	<string>Necesitamos tu ubicación para registrar dónde se realiza el escaneo.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Se requiere acceso constante a la ubicación para funciones de rastreo.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Se requiere acceso constante a la ubicación para funciones de rastreo.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>fetch</string>
+	</array>
 </dict>
 </plist>

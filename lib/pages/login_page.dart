@@ -3,6 +3,7 @@ import '../core/app_colors.dart';
 import '../atoms/app_button.dart';
 import '../atoms/app_text_field.dart';
 import '../services/auth_service.dart';
+import '../services/location_tracking_service.dart';
 import 'home_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -27,11 +28,14 @@ class _LoginPageState extends State<LoginPage> {
   /// Intenta restaurar sesión guardada
   Future<void> _tryAutoLogin() async {
     final loggedIn = await _authService.tryAutoLogin();
-    if (loggedIn && mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomePage()),
-      );
+    if (loggedIn) {
+      LocationTrackingService.instance.start();
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomePage()),
+        );
+      }
     }
   }
 
@@ -60,6 +64,8 @@ class _LoginPageState extends State<LoginPage> {
         print('Usuario: ${_authService.userName}');
         print('Rol: ${_authService.userRole}');
         print('=====================');
+
+        LocationTrackingService.instance.start();
 
         if (mounted) {
           Navigator.pushReplacement(
