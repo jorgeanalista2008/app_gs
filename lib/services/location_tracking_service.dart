@@ -166,6 +166,7 @@ class LocationTrackingService {
       );
       print('📍 [LocationTracking] lugar de visita $visitId → '
           '${pos.latitude},${pos.longitude} (±${pos.accuracy.toStringAsFixed(0)}m)');
+      unawaited(SyncQueueService.instance.drain(force: false));
       return pos;
     } catch (e) {
       print('❌ [LocationTracking] error capturando lugar de visita: $e');
@@ -292,6 +293,10 @@ class LocationTrackingService {
 
       print('📍 [LocationTracking] guardado ${pos.latitude},${pos.longitude} '
           '(±${pos.accuracy.toStringAsFixed(0)}m)');
+
+      // Push inmediato: sin esperar los 2 min del timer periódico.
+      // fire-and-forget para no bloquear el stream de posiciones.
+      unawaited(SyncQueueService.instance.drain(force: false));
     } catch (e) {
       print('❌ [LocationTracking] error al guardar: $e');
     }

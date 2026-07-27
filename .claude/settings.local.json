@@ -18,7 +18,13 @@
       "Bash(cat db/seed/20260507_002_salesperson_role.sql)",
       "Bash(cd \"C:\\\\Users\\\\Solsumed Design\\\\Documents\\\\GitHub\\\\gsolsumed_backend\")",
       "Bash(find . -maxdepth 1 -iname \".env*\")",
-      "Bash(find \"/c/Users/Solsumed Design/Documents/GitHub/gsolsumed_backend/db\" -name \"*.sql\" -exec grep -l \"visit_questions\" {} \\\\;)"
+      "Bash(find \"/c/Users/Solsumed Design/Documents/GitHub/gsolsumed_backend/db\" -name \"*.sql\" -exec grep -l \"visit_questions\" {} \\\\;)",
+      "Bash(grep -n \"^\\\\.env\\\\|^env\\\\|env$\" /home/enyelberth/Github/gsolsumed_backend/.gitignore)",
+      "Bash(chmod +x /home/enyelberth/Github/gsolsumed_backend/scripts/setup-server.sh)",
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(./node_modules/.bin/next build *)"
     ]
   }
 }
