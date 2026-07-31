@@ -58,6 +58,21 @@ class SyncQueueService {
       StreamController<int>.broadcast();
   Stream<int> get pendingCountStream => _pendingCountController.stream;
 
+  /// Genera un dedup_key único para la operación (uuid v4 simple).
+  /// Se pasa al backend en el body como `client_dedup_key` — si el mismo
+  /// key llega dos veces, el backend devuelve la fila existente en vez de
+  /// crear un duplicado. Esencial para reintentos tras timeout de red.
+  String _newDedupKey() {
+    final rand = DateTime.now().microsecondsSinceEpoch;
+    final r = rand.toRadixString(16).padLeft(12, '0');
+    // 32 hex chars → simula uuid sin dependencia extra.
+    final b = List<int>.generate(
+      12,
+      (i) => (rand ^ (rand >> (i * 3))) & 0xff,
+    ).map((n) => n.toRadixString(16).padLeft(2, '0')).join();
+    return '$r-$b'.substring(0, 32);
+  }
+
   /// Encola una operación. Devuelve el id local de la operación.
   Future<int> enqueue({
     required String entityType,
@@ -70,13 +85,23 @@ class SyncQueueService {
   }) async {
     final db = await _db.database;
     final now = DateTime.now().toUtc().toIso8601String();
+
+    // Solo POST necesita idempotency key (crea recursos nuevos).
+    // Si el caller no lo puso, generamos uno y lo inyectamos en el payload
+    // como `client_dedup_key`. Backend lo lee y bloquea duplicados.
+    Map<String, dynamic>? finalPayload = payload;
+    if (httpMethod.toUpperCase() == 'POST' && payload != null) {
+      finalPayload = Map<String, dynamic>.from(payload);
+      finalPayload.putIfAbsent('client_dedup_key', () => _newDedupKey());
+    }
+
     final id = await db.insert('pending_operations', {
       'entity_type': entityType,
       'entity_local_id': entityLocalId,
       'operation': operation,
       'http_method': httpMethod.toUpperCase(),
       'endpoint': endpoint,
-      'payload_json': payload == null ? null : jsonEncode(payload),
+      'payload_json': finalPayload == null ? null : jsonEncode(finalPayload),
       'attempts': 0,
       'max_attempts': maxAttempts,
       'next_retry_at': now,
@@ -91,6 +116,12 @@ class SyncQueueService {
 
   /// Inicia drain automático: dispara cuando vuelve la red + timer cada 2 min.
   void start() {
+    // Reset de operaciones colgadas por crash: cualquier fila en
+    // status='in_progress' al arrancar la app volvió porque la instancia
+    // anterior murió a mitad de request. Vuelven a 'pending' para que el
+    // próximo drain las reintente (con dedup_key el backend evita duplicar).
+    _resetInProgressOnBoot();
+
     _connSub ??= _connectivity.onConnectivityChanged.listen((result) {
       // Igual que ConnectivityService.isConnected(): cualquier resultado
       // distinto de `none` cuenta como online (vpn/bluetooth/other también
@@ -106,6 +137,23 @@ class SyncQueueService {
     _periodicTimer ??= Timer.periodic(_periodicInterval, (_) => SyncService.instance.intentarSubirDatos());
     // Sincronización inicial al arrancar (si hay red).
     SyncService.instance.ejecutarSincronizacionCompleta();
+  }
+
+  Future<void> _resetInProgressOnBoot() async {
+    try {
+      final db = await _db.database;
+      final now = DateTime.now().toUtc().toIso8601String();
+      final n = await db.update(
+        'pending_operations',
+        {'status': 'pending', 'next_retry_at': now, 'updated_at': now},
+        where: "status = 'in_progress'",
+      );
+      if (n > 0) {
+        print('♻️  [SyncQueue] reset $n operaciones in_progress colgadas');
+      }
+    } catch (e) {
+      print('⚠️  [SyncQueue] reset in_progress falló: $e');
+    }
   }
 
   void stop() {

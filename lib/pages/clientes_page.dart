@@ -102,18 +102,59 @@ class _ClientesPageState extends State<ClientesPage>
     }
   }
 
+  /// Normaliza texto para búsqueda: minúsculas, sin acentos, sin espacios
+  /// extras. Aplica al query y a cada campo del cliente.
+  String _norm(String? s) {
+    if (s == null) return '';
+    var t = s.toLowerCase().trim();
+    const from = 'áéíóúñü';
+    const to = 'aeiounu';
+    for (int i = 0; i < from.length; i++) {
+      t = t.replaceAll(from[i], to[i]);
+    }
+    return t;
+  }
+
+  /// Normaliza RIF/cédula: quita guiones, puntos, espacios y prefijo (J/V/E/G).
+  /// Permite buscar "J40199" y matchear "J-40199731-7", "J401997317", etc.
+  String _normRif(String? s) {
+    if (s == null) return '';
+    return s
+        .toUpperCase()
+        .replaceAll(RegExp(r'[^A-Z0-9]'), '');
+  }
+
   void _aplicarFiltro() {
     final base = _tabController.index == 0 ? _clientes : _prospectos;
-    final query = _searchController.text.trim().toLowerCase();
+    final rawQuery = _searchController.text.trim();
+    final query = _norm(rawQuery);
+    final queryRif = _normRif(rawQuery);
     List<ClienteModel> lista;
+
     if (query.isEmpty) {
       lista = List.of(base);
     } else {
       lista = base.where((c) {
-        return c.name.toLowerCase().contains(query) ||
-            c.codeClientProfit.toLowerCase().contains(query) ||
-            c.taxId.toLowerCase().contains(query) ||
-            c.telefono.contains(query);
+        // Match RIF/código sin importar guiones o prefijo
+        if (queryRif.length >= 3) {
+          if (_normRif(c.taxId).contains(queryRif)) return true;
+          if (_normRif(c.codeClientProfit).contains(queryRif)) return true;
+        }
+
+        // Match texto libre en TODOS los campos relevantes del modelo
+        if (_norm(c.name).contains(query)) return true;
+        if (_norm(c.codeClientProfit).contains(query)) return true;
+        if (_norm(c.taxId).contains(query)) return true;
+        if (_norm(c.telefono).contains(query)) return true;
+        if (_norm(c.email).contains(query)) return true;
+        if (_norm(c.direccion).contains(query)) return true;
+        if (_norm(c.notes).contains(query)) return true;
+        if (_norm(c.contactName).contains(query)) return true;
+        if (_norm(c.city).contains(query)) return true;
+        if (_norm(c.zoneCode).contains(query)) return true;
+        if (_norm(c.tipo).contains(query)) return true;
+
+        return false;
       }).toList();
     }
 

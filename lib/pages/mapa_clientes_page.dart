@@ -106,7 +106,8 @@ class _MapaClientesPageState extends State<MapaClientesPage> {
           point: _miPosicion!,
           width: 40,
           height: 40,
-          child: const Icon(Icons.my_location, color: Colors.blue, size: 40),
+          child: const Icon(Icons.my_location,
+              color: AppColors.accentColor, size: 40),
         ),
       );
     }
@@ -149,14 +150,20 @@ class _MapaClientesPageState extends State<MapaClientesPage> {
                   const SizedBox(height: 2),
                   Icon(
                     tieneVisita ? Icons.location_on : Icons.location_on_outlined,
-                    color: tieneVisita ? Colors.green : Colors.red,
+                    color: tieneVisita
+                        ? AppColors.successColor
+                        : AppColors.errorColor,
                     size: 30,
                   ),
                   if (visitasCount > 0)
                     Container(
                       padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
-                      child: Text('$visitasCount', style: const TextStyle(color: Colors.white, fontSize: 8)),
+                      decoration: const BoxDecoration(
+                          color: AppColors.successColor,
+                          shape: BoxShape.circle),
+                      child: Text('$visitasCount',
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 8)),
                     ),
                 ],
               ),
