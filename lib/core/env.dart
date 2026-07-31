@@ -11,6 +11,6 @@
 class Env {
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://clientes.grupo-solsumed.com',
+    defaultValue: 'http://movil.grupo-solsumed.com',
   );
 }
