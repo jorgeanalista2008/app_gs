@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 
 import 'auth_service.dart';
 import 'database_helper.dart';
+import 'device_identity_service.dart';
 import 'sync_queue_service.dart';
 
 /// Registra la ubicación del usuario cada 1 minuto mientras haya sesión.
@@ -118,11 +119,8 @@ class LocationTrackingService {
       print('📍 [LocationTracking] permisos insuficientes para lugar de visita');
       return null;
     }
-    final userId = AuthService.instance.userId;
-    if (userId == null) {
-      print('📍 [LocationTracking] sin usuario, no se guarda lugar de visita');
-      return null;
-    }
+    final userId = await _resolveUserId();
+    final deviceId = await DeviceIdentityService.instance.deviceId();
     try {
       final pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.best,
@@ -133,6 +131,7 @@ class LocationTrackingService {
       await DatabaseHelper.instance.insertarUbicacion(
         id: id,
         userId: userId,
+        deviceId: deviceId,
         lat: pos.latitude,
         lng: pos.longitude,
         accuracy: pos.accuracy,
@@ -142,6 +141,7 @@ class LocationTrackingService {
         recordedAt: recordedAt,
         lugarVisita: true,
         visitId: visitId,
+        locationSource: 'lugar_visita',
       );
       await SyncQueueService.instance.enqueue(
         entityType: _entityType,
@@ -151,7 +151,8 @@ class LocationTrackingService {
         endpoint: _syncEndpoint,
         payload: {
           'id': id,
-          'user_id': userId,
+          if (userId != null) 'user_id': userId,
+          'device_id': deviceId,
           'lat': pos.latitude,
           'lng': pos.longitude,
           'accuracy': pos.accuracy,
@@ -161,6 +162,7 @@ class LocationTrackingService {
           'recorded_at': recordedAt.toUtc().toIso8601String(),
           'lugar_visita': true,
           'visit_id': visitId,
+          'location_source': 'lugar_visita',
           if (note != null) 'note': note,
         },
       );
@@ -172,6 +174,71 @@ class LocationTrackingService {
       print('❌ [LocationTracking] error capturando lugar de visita: $e');
       return null;
     }
+  }
+
+  /// Guarda una muestra de ubicación explícita (foto, prospecto, etc.).
+  /// Devuelve el id local de la ubicación insertada.
+  Future<String?> registrarUbicacionEvento({
+    required Position pos,
+    required DateTime capturedAt,
+    required String source,
+    String? visitId,
+    String? contextId,
+  }) async {
+    try {
+      final userId = await _resolveUserId();
+      final deviceId = await DeviceIdentityService.instance.deviceId();
+      final id = _uuid.v4();
+      await DatabaseHelper.instance.insertarUbicacion(
+        id: id,
+        userId: userId,
+        deviceId: deviceId,
+        lat: pos.latitude,
+        lng: pos.longitude,
+        accuracy: pos.accuracy,
+        altitude: pos.altitude,
+        speed: pos.speed,
+        heading: pos.heading,
+        recordedAt: capturedAt,
+        lugarVisita: source == 'foto' || source == 'lugar_visita',
+        visitId: visitId,
+        locationSource: source,
+      );
+      await SyncQueueService.instance.enqueue(
+        entityType: _entityType,
+        entityLocalId: id,
+        operation: 'create',
+        httpMethod: 'POST',
+        endpoint: _syncEndpoint,
+        payload: {
+          'id': id,
+          if (userId != null) 'user_id': userId,
+          'device_id': deviceId,
+          'lat': pos.latitude,
+          'lng': pos.longitude,
+          'accuracy': pos.accuracy,
+          'altitude': pos.altitude,
+          'speed': pos.speed,
+          'heading': pos.heading,
+          'recorded_at': capturedAt.toUtc().toIso8601String(),
+          'lugar_visita': source == 'foto' || source == 'lugar_visita',
+          if (visitId != null) 'visit_id': visitId,
+          if (contextId != null) 'context_id': contextId,
+          'location_source': source,
+        },
+      );
+      unawaited(SyncQueueService.instance.drain(force: false));
+      return id;
+    } catch (e) {
+      print('❌ [LocationTracking] error registrarUbicacionEvento($source): $e');
+      return null;
+    }
+  }
+
+  Future<String?> _resolveUserId() async {
+    final active = AuthService.instance.userId;
+    if (active != null) return active;
+    return DeviceIdentityService.instance.lastKnownUserId();
   }
 
   Future<void> stop() async {
@@ -248,11 +315,8 @@ class LocationTrackingService {
       return;
     }
 
-    final userId = AuthService.instance.userId;
-    if (userId == null) {
-      print('📍 [LocationTracking] sin usuario en sesión, se descarta muestra');
-      return;
-    }
+    final userId = await _resolveUserId();
+    final deviceId = await DeviceIdentityService.instance.deviceId();
 
     final id = _uuid.v4();
     final recordedAt = pos.timestamp ?? now;
@@ -261,6 +325,7 @@ class LocationTrackingService {
       await DatabaseHelper.instance.insertarUbicacion(
         id: id,
         userId: userId,
+        deviceId: deviceId,
         lat: pos.latitude,
         lng: pos.longitude,
         accuracy: pos.accuracy,
@@ -268,6 +333,7 @@ class LocationTrackingService {
         speed: pos.speed,
         heading: pos.heading,
         recordedAt: recordedAt,
+        locationSource: 'tracking',
       );
       _lastSavedAt = now;
 
@@ -279,7 +345,8 @@ class LocationTrackingService {
         endpoint: _syncEndpoint,
         payload: {
           'id': id,
-          'user_id': userId,
+          if (userId != null) 'user_id': userId,
+          'device_id': deviceId,
           'lat': pos.latitude,
           'lng': pos.longitude,
           'accuracy': pos.accuracy,
@@ -288,6 +355,7 @@ class LocationTrackingService {
           'heading': pos.heading,
           'recorded_at': recordedAt.toUtc().toIso8601String(),
           'lugar_visita': false,
+          'location_source': 'tracking',
         },
       );
 

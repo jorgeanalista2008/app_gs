@@ -422,14 +422,9 @@ class _EncuestaPageState extends State<EncuestaPage> {
             Expanded(
               child: PhotoCaptureWidget(
                 label: 'Foto del local',
+                visitId: widget.visita.id,
                 onPhotoTaken: (file, _) {
                   _foto1Path = file?.path;
-                  if (file != null) {
-                    LocationTrackingService.instance.registrarLugarVisita(
-                      visitId: widget.visita.id,
-                      note: 'foto_local',
-                    );
-                  }
                 },
               ),
             ),
@@ -437,14 +432,9 @@ class _EncuestaPageState extends State<EncuestaPage> {
             Expanded(
               child: PhotoCaptureWidget(
                 label: 'Foto adicional',
+                visitId: widget.visita.id,
                 onPhotoTaken: (file, _) {
                   _foto2Path = file?.path;
-                  if (file != null) {
-                    LocationTrackingService.instance.registrarLugarVisita(
-                      visitId: widget.visita.id,
-                      note: 'foto_adicional',
-                    );
-                  }
                 },
               ),
             ),

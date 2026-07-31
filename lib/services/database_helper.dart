@@ -20,7 +20,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 12,
+      version: 13,
       onCreate: (db, version) async {
         await _createTables(db);
       },
@@ -92,6 +92,19 @@ class DatabaseHelper {
           try {
             await db.execute(
                 'CREATE INDEX IF NOT EXISTS idx_ubicaciones_visit ON ubicaciones(visit_id, lugar_visita)');
+          } catch (_) {}
+        }
+        if (oldVersion < 13) {
+          try {
+            await db.execute('ALTER TABLE ubicaciones ADD COLUMN device_id TEXT');
+          } catch (_) {}
+          try {
+            await db.execute(
+                "ALTER TABLE ubicaciones ADD COLUMN location_source TEXT NOT NULL DEFAULT 'tracking'");
+          } catch (_) {}
+          try {
+            await db.execute(
+                'CREATE INDEX IF NOT EXISTS idx_ubicaciones_device ON ubicaciones(device_id, recorded_at)');
           } catch (_) {}
         }
       },
@@ -244,7 +257,8 @@ class DatabaseHelper {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS ubicaciones (
         id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
+        user_id TEXT,
+        device_id TEXT,
         lat REAL NOT NULL,
         lng REAL NOT NULL,
         accuracy REAL,
@@ -254,6 +268,7 @@ class DatabaseHelper {
         recorded_at TEXT NOT NULL,
         lugar_visita INTEGER NOT NULL DEFAULT 0,
         visit_id TEXT,
+        location_source TEXT NOT NULL DEFAULT 'tracking',
         sincronizado INTEGER NOT NULL DEFAULT 0,
         server_id TEXT,
         created_at TEXT NOT NULL
@@ -267,6 +282,9 @@ class DatabaseHelper {
     );
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_ubicaciones_visit ON ubicaciones(visit_id, lugar_visita)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_ubicaciones_device ON ubicaciones(device_id, recorded_at)',
     );
   }
 
@@ -1064,7 +1082,8 @@ class DatabaseHelper {
 
   Future<int> insertarUbicacion({
     required String id,
-    required String userId,
+    String? userId,
+    String? deviceId,
     required double lat,
     required double lng,
     double? accuracy,
@@ -1074,12 +1093,14 @@ class DatabaseHelper {
     required DateTime recordedAt,
     bool lugarVisita = false,
     String? visitId,
+    String locationSource = 'tracking',
   }) async {
     final db = await database;
     final nowIso = DateTime.now().toUtc().toIso8601String();
     return db.insert('ubicaciones', {
       'id': id,
       'user_id': userId,
+      'device_id': deviceId,
       'lat': lat,
       'lng': lng,
       'accuracy': accuracy,
@@ -1089,6 +1110,7 @@ class DatabaseHelper {
       'recorded_at': recordedAt.toUtc().toIso8601String(),
       'lugar_visita': lugarVisita ? 1 : 0,
       'visit_id': visitId,
+      'location_source': locationSource,
       'sincronizado': 0,
       'created_at': nowIso,
     }, conflictAlgorithm: ConflictAlgorithm.replace);

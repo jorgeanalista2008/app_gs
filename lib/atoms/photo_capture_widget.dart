@@ -2,19 +2,50 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import '../core/app_colors.dart';
+import '../services/location_tracking_service.dart';
+
+/// Payload devuelto tras capturar/seleccionar una foto.
+///
+/// [position] y [capturedAt] describen dónde y cuándo se tomó la foto —
+/// crítico para que backend guarde la ubicación real del evento, no la de
+/// la subida. `position` es null si el GPS no respondió a tiempo o el
+/// permiso está denegado.
+class PhotoCapture {
+  final File? file;
+  final String? base64;
+  final Position? position;
+  final DateTime capturedAt;
+  final String? ubicacionLocalId;
+
+  const PhotoCapture({
+    required this.file,
+    required this.base64,
+    required this.position,
+    required this.capturedAt,
+    required this.ubicacionLocalId,
+  });
+}
 
 class PhotoCaptureWidget extends StatefulWidget {
   final String label;
   final Function(File? file, String? base64String)? onPhotoTaken;
+  final Function(PhotoCapture capture)? onPhotoTakenWithLocation;
   final File? initialPhoto;
+
+  /// Si se pasa, cada foto capturada registra una ubicación asociada a
+  /// esta visita (`location_source='foto'`).
+  final String? visitId;
 
   const PhotoCaptureWidget({
     super.key,
     this.label = 'Tomar foto',
     this.onPhotoTaken,
+    this.onPhotoTakenWithLocation,
     this.initialPhoto,
+    this.visitId,
   });
 
   @override
@@ -41,11 +72,31 @@ class _PhotoCaptureWidgetState extends State<PhotoCaptureWidget> {
       );
 
       if (image != null) {
+        final capturedAt = DateTime.now();
         final bytes = await image.readAsBytes();
         final base64String = base64Encode(bytes);
         final file = File(image.path);
         setState(() => _photo = file);
+        // Capturar ubicación en paralelo — no bloquear la UI si tarda.
+        final pos = await _capturarUbicacion();
+        String? ubicacionId;
+        if (pos != null) {
+          ubicacionId = await LocationTrackingService.instance
+              .registrarUbicacionEvento(
+            pos: pos,
+            capturedAt: capturedAt,
+            source: 'foto',
+            visitId: widget.visitId,
+          );
+        }
         widget.onPhotoTaken?.call(file, base64String);
+        widget.onPhotoTakenWithLocation?.call(PhotoCapture(
+          file: file,
+          base64: base64String,
+          position: pos,
+          capturedAt: capturedAt,
+          ubicacionLocalId: ubicacionId,
+        ));
       }
     } catch (e) {
       print('❌ Error al tomar foto: $e');
@@ -70,14 +121,65 @@ class _PhotoCaptureWidgetState extends State<PhotoCaptureWidget> {
       );
 
       if (image != null) {
+        final capturedAt = DateTime.now();
         final bytes = await image.readAsBytes();
         final base64String = base64Encode(bytes);
         final file = File(image.path);
         setState(() => _photo = file);
+        // Galería: la ubicación es la actual del dispositivo, no la EXIF de
+        // la foto. image_picker no expone EXIF de forma confiable; si en el
+        // futuro se necesita, leer con `native_exif` desde image.path.
+        final pos = await _capturarUbicacion();
+        String? ubicacionId;
+        if (pos != null) {
+          ubicacionId = await LocationTrackingService.instance
+              .registrarUbicacionEvento(
+            pos: pos,
+            capturedAt: capturedAt,
+            source: 'foto_galeria',
+            visitId: widget.visitId,
+          );
+        }
         widget.onPhotoTaken?.call(file, base64String);
+        widget.onPhotoTakenWithLocation?.call(PhotoCapture(
+          file: file,
+          base64: base64String,
+          position: pos,
+          capturedAt: capturedAt,
+          ubicacionLocalId: ubicacionId,
+        ));
       }
     } catch (e) {
       print('❌ Error al seleccionar foto: $e');
+    }
+  }
+
+  Future<Position?> _capturarUbicacion() async {
+    if (kIsWeb) return null;
+    try {
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) return null;
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) {
+        return null;
+      }
+      // best accuracy con tope de 12s: si el fix tarda más, se cae a
+      // getLastKnownPosition para no dejar la foto sin coordenada.
+      try {
+        return await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.best,
+          timeLimit: const Duration(seconds: 12),
+        );
+      } catch (_) {
+        return await Geolocator.getLastKnownPosition();
+      }
+    } catch (e) {
+      print('📍 [PhotoCapture] no se pudo capturar ubicación: $e');
+      return null;
     }
   }
 

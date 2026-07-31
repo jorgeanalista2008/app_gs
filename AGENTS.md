@@ -27,7 +27,7 @@ flutter run --dart-define=API_BASE_URL=http://192.168.0.128:3000
 flutter build apk --dart-define=API_BASE_URL=http://192.168.0.128:3000
 ```
 
-API base URL is set via a compile-time `--dart-define=API_BASE_URL=...` read in `lib/core/env.dart` (`Env.apiBaseUrl`, `String.fromEnvironment`). There is no `.env` loader — if `API_BASE_URL` isn't passed, it defaults to the production API at `https://movil.grupo-solsumed.com`. Any build/run command without the flag targets production.
+API base URL is set via a compile-time `--dart-define=API_BASE_URL=...` read in `lib/core/env.dart` (`Env.apiBaseUrl`, `String.fromEnvironment`). There is no `.env` loader — if `API_BASE_URL` isn't passed, it defaults to the production API at `https://clientes.grupo-solsumed.com`. Any build/run command without the flag targets production.
 
 ## Architecture
 

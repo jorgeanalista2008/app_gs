@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'services/database_helper.dart';
@@ -24,6 +26,10 @@ void main() async {
   ClienteRepository.registerSyncHandlers();
   PreguntaRepository.registerSyncHandlers();
   LocationTrackingService.registerSyncHandlers();
+  // Arranca el tracker sin depender de sesión. Si no hay permisos aún,
+  // el servicio lo detecta y no arranca; se re-intenta al login o cuando
+  // el usuario habilite permisos desde ajustes del SO.
+  unawaited(LocationTrackingService.instance.start());
   SyncQueueService.instance.start();
   // Limpia operaciones exitosas viejas en background.
   SyncQueueService.instance.purgeOldSuccessful();

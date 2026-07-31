@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'database_helper.dart';
 import 'connectivity_service.dart';
-import 'location_tracking_service.dart';
+import 'device_identity_service.dart';
 import '../repositories/generic_repository.dart';
 
 class AuthService {
@@ -29,6 +29,10 @@ class AuthService {
       _currentUser?['role'] == 'vendedor' ||
       _currentUser?['role'] == 'vendedor_foraneo';
   bool get isForaneo => _currentUser?['role'] == 'vendedor_foraneo';
+  // Rol supervisor read-only: dashboards y KPIs, sin crear pedidos/visitas.
+  bool get isGerenteComercial => _currentUser?['role'] == 'gerente_comercial';
+  bool get isGerente =>
+      _currentUser?['role'] == 'gerente' || isGerenteComercial;
   String? get userId => _currentUser?['id']?.toString();
   String? get userName => _currentUser?['full_name']?.toString();
   String? get userRole => _currentUser?['role']?.toString();
@@ -63,6 +67,11 @@ class AuthService {
             String role;
             if (rawRole.contains('admin')) {
               role = 'admin';
+            } else if (rawRole.contains('gerente comercial') ||
+                rawRole == 'gerente_comercial') {
+              role = 'gerente_comercial';
+            } else if (rawRole == 'gerente' || rawRole.contains('gerente')) {
+              role = 'gerente';
             } else if (rawRole.contains('foraneo') || rawRole.contains('foráneo')) {
               role = 'vendedor_foraneo';
             } else {
@@ -111,7 +120,9 @@ class AuthService {
   }
 
   Future<void> logout() async {
-    await LocationTrackingService.instance.stop();
+    // Nota: no se detiene LocationTrackingService adrede — el tracking
+    // continúa asociado al device_id + last_known_user_id, y sus muestras
+    // se subirán cuando otro usuario inicie sesión o vuelva la red.
     _currentUser = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_userDataKey);
@@ -151,6 +162,10 @@ class AuthService {
       'company_id': user['company_id'],
       'branch_id': user['branch_id'],
     }));
+    final userId = user['id']?.toString();
+    if (userId != null && userId.isNotEmpty) {
+      await DeviceIdentityService.instance.setLastKnownUserId(userId);
+    }
   }
 
   Future<void> updateLocalSession(Map<String, dynamic> user) async {
