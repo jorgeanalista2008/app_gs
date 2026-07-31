@@ -1,6 +1,7 @@
 import 'dart:convert';
 import '../services/database_helper.dart';
 import '../services/sync_queue_service.dart';
+import 'generic_repository.dart';
 
 class PreguntaRepository {
   final DatabaseHelper _db = DatabaseHelper.instance;
@@ -50,7 +51,12 @@ class PreguntaRepository {
     }
   }
 
-  /// Crea una pregunta offline: insert local + enqueue POST /visit/questions.
+  /// Crea una pregunta offline: insert local + enqueue POST
+  /// /salesperson/auth/questions (endpoint público idempotente por `code`).
+  ///
+  /// Antes se usaba /visit/questions, pero ese endpoint requiere JWT admin.
+  /// El vendedor no tiene permisos ahí → cada intento devolvía 401 y la
+  /// pregunta se quedaba en la cola sin llegar al servidor.
   Future<void> crearPregunta({
     required String encuestaId,
     required String descripcion,
@@ -72,7 +78,21 @@ class PreguntaRepository {
       sincronizado: 0,
     );
 
+    // Recupera credenciales del vendedor local para el endpoint público.
+    final salespersonId = await GenericRepository.instance.getUserId();
+    String? email;
+    String? password;
+    if (salespersonId != null) {
+      final userLocal = await _db.getUsuario(salespersonId);
+      if (userLocal != null) {
+        email = userLocal['username']?.toString();
+        password = userLocal['password']?.toString();
+      }
+    }
+
     final payload = <String, dynamic>{
+      // Backend usa `code` como clave de idempotencia — reintentos con el
+      // mismo code devuelven el id existente en vez de duplicar.
       'code': localId,
       'description': descripcion,
       'question_type': tipo,
@@ -80,6 +100,8 @@ class PreguntaRepository {
       'sort_order': orden,
       if (tipo == 'MULTIPLE_CHOICE' && opciones != null && opciones.isNotEmpty)
         'response_options': opciones,
+      if (email != null) 'email': email,
+      if (password != null) 'password': password,
     };
 
     await SyncQueueService.instance.enqueue(
@@ -87,7 +109,7 @@ class PreguntaRepository {
       entityLocalId: localId,
       operation: 'create',
       httpMethod: 'POST',
-      endpoint: '/visit/questions',
+      endpoint: '/salesperson/auth/questions',
       payload: payload,
     );
 
