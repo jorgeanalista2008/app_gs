@@ -173,7 +173,7 @@ class AuthService {
     await _saveSession(user);
   }
 
-  Future<String?> getToken() async => _onlineToken ?? _currentUser?['id']?.toString();
+  Future<String?> getToken() async => _onlineToken;
 
   Future<Map<String, dynamic>?> getUserData() async {
     if (_currentUser == null) return null;

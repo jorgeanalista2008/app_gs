@@ -692,6 +692,13 @@ class SyncService {
 
       print('🔄 [SyncService] Iniciando sincronización completa automática...');
 
+      // Autenticar online primero para obtener JWT token antes de procesar la cola
+      print('🔑 [SyncService] Autenticando en línea...');
+      final autenticado = await _authenticateOnline();
+      if (!autenticado) {
+        print('⚠️ [SyncService] No se pudo obtener token JWT, continuando sin él...');
+      }
+
       // 1. Subir operaciones en cola (prospectos, respuestas, etc.)
       print('📤 [SyncService] Subiendo operaciones pendientes en la cola...');
       await SyncQueueService.instance.drain();
@@ -752,7 +759,14 @@ class SyncService {
       }
 
       print('🔄 [SyncService] Iniciando intento periódico de subida de datos...');
-      
+
+      // Autenticar online primero para obtener JWT token antes de procesar la cola
+      print('🔑 [SyncService] Autenticando en línea...');
+      final autenticado = await _authenticateOnline();
+      if (!autenticado) {
+        print('⚠️ [SyncService] No se pudo obtener token JWT, continuando sin él...');
+      }
+
       // Drenar la cola forzando la ejecución
       await SyncQueueService.instance.drain(force: true);
 
