@@ -25,12 +25,15 @@ class LocationTrackingService {
   static final LocationTrackingService instance = LocationTrackingService._();
 
   static const Duration interval = Duration(minutes: 1);
+  static const Duration watchdogInterval = Duration(minutes: 3);
+  static const Duration staleThreshold = Duration(minutes: 3);
   static const String _syncEndpoint = '/ubicaciones';
   static const String _entityType = 'ubicacion';
 
   final _uuid = const Uuid();
   StreamSubscription<Position>? _sub;
   Timer? _fallbackTimer;
+  Timer? _watchdogTimer;
   bool _starting = false;
   DateTime? _lastSavedAt;
 
@@ -101,8 +104,34 @@ class LocationTrackingService {
         });
         print('📍 [LocationTracking] timer fallback iniciado');
       }
+      _watchdogTimer ??= Timer.periodic(watchdogInterval, (_) => _checkHealth());
     } finally {
       _starting = false;
+    }
+  }
+
+  /// Reinicia el stream si no hemos guardado muestras en `staleThreshold`.
+  /// Cubre el caso Android en que `getPositionStream` muere (usuario apagó
+  /// GPS, error nativo, doze mode) y `_sub` queda vivo pero mudo.
+  Future<void> _checkHealth() async {
+    final now = DateTime.now();
+    final stale = _lastSavedAt == null ||
+        now.difference(_lastSavedAt!) > staleThreshold;
+    if (!stale) return;
+    final age = _lastSavedAt == null
+        ? 'start'
+        : '${now.difference(_lastSavedAt!).inSeconds}s';
+    print('🩺 [LocationTracking] stream sin muestras hace $age → reinicio');
+    try {
+      await _sub?.cancel();
+      _sub = null;
+      _fallbackTimer?.cancel();
+      _fallbackTimer = null;
+      // No reseteamos _lastSavedAt: si sigue sin poder capturar, próximo
+      // watchdog volverá a reintentar sin generar bucle inmediato.
+      await start();
+    } catch (e) {
+      print('❌ [LocationTracking] watchdog restart error: $e');
     }
   }
 
@@ -246,6 +275,8 @@ class LocationTrackingService {
     _sub = null;
     _fallbackTimer?.cancel();
     _fallbackTimer = null;
+    _watchdogTimer?.cancel();
+    _watchdogTimer = null;
     _lastSavedAt = null;
     print('📍 [LocationTracking] detenido');
   }

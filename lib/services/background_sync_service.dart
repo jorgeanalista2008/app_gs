@@ -1,8 +1,12 @@
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/widgets.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:uuid/uuid.dart';
 import 'package:workmanager/workmanager.dart';
 import 'auth_service.dart';
+import 'database_helper.dart';
+import 'device_identity_service.dart';
 import 'sync_queue_service.dart';
 import 'sync_service.dart';
 
@@ -27,6 +31,11 @@ void backgroundSyncCallbackDispatcher() {
         return Future.value(true);
       }
 
+      // Captura una muestra GPS antes del drain: cubre el caso de app
+      // killed por OEM o Doze donde el foreground service de tracking
+      // se detiene. WorkManager corre cada ~15 min mínimo.
+      await _capturarUbicacionBackground();
+
       await SyncQueueService.instance.drain(force: true);
       await SyncService.instance.marcarTodoSincronizado();
       print('🌙 [BackgroundSync] sincronización en 2do plano completada');
@@ -36,6 +45,72 @@ void backgroundSyncCallbackDispatcher() {
       return Future.value(false);
     }
   });
+}
+
+/// Toma una muestra GPS desde el isolate de WorkManager, la persiste en
+/// SQLite y la encola. No aborta la sincronización si falla (permisos,
+/// GPS apagado, timeout).
+Future<void> _capturarUbicacionBackground() async {
+  try {
+    final enabled = await Geolocator.isLocationServiceEnabled();
+    if (!enabled) {
+      print('🌙 [BackgroundSync] GPS desactivado, sin muestra');
+      return;
+    }
+    final perm = await Geolocator.checkPermission();
+    if (perm != LocationPermission.always &&
+        perm != LocationPermission.whileInUse) {
+      print('🌙 [BackgroundSync] permiso insuficiente ($perm), sin muestra');
+      return;
+    }
+    final pos = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+      timeLimit: const Duration(seconds: 30),
+    );
+    final userId = AuthService.instance.userId ??
+        await DeviceIdentityService.instance.lastKnownUserId();
+    final deviceId = await DeviceIdentityService.instance.deviceId();
+    final id = const Uuid().v4();
+    final recordedAt = pos.timestamp ?? DateTime.now();
+    await DatabaseHelper.instance.insertarUbicacion(
+      id: id,
+      userId: userId,
+      deviceId: deviceId,
+      lat: pos.latitude,
+      lng: pos.longitude,
+      accuracy: pos.accuracy,
+      altitude: pos.altitude,
+      speed: pos.speed,
+      heading: pos.heading,
+      recordedAt: recordedAt,
+      locationSource: 'background',
+    );
+    await SyncQueueService.instance.enqueue(
+      entityType: 'ubicacion',
+      entityLocalId: id,
+      operation: 'create',
+      httpMethod: 'POST',
+      endpoint: '/ubicaciones',
+      payload: {
+        'id': id,
+        if (userId != null) 'user_id': userId,
+        'device_id': deviceId,
+        'lat': pos.latitude,
+        'lng': pos.longitude,
+        'accuracy': pos.accuracy,
+        'altitude': pos.altitude,
+        'speed': pos.speed,
+        'heading': pos.heading,
+        'recorded_at': recordedAt.toUtc().toIso8601String(),
+        'lugar_visita': false,
+        'location_source': 'background',
+      },
+    );
+    print('🌙 [BackgroundSync] muestra GPS capturada '
+        '${pos.latitude},${pos.longitude} (±${pos.accuracy.toStringAsFixed(0)}m)');
+  } catch (e) {
+    print('❌ [BackgroundSync] captura GPS falló: $e');
+  }
 }
 
 /// Registra la sincronización periódica en segundo plano usando el
