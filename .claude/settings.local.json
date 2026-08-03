@@ -59,7 +59,10 @@
       "Bash(grep -n \"salespersons/\\\\${\\\\|href.*id\\\\|table\\\\|SalespersonsList\\\\|Link\" /home/enyelberth/Github/gsolsumed_frontend/src/app/admin/salespersons/page.tsx /home/enyelberth/Github/gsolsumed_frontend/src/components/features/dashboard/salespersons-list.tsx)",
       "Bash(curl -sS -o /dev/null -w \"192.168.0.128:3000 HTTP=%{http_code} time=%{time_total}s\\\\n\" --max-time 5 http://192.168.0.128:3000/docs)",
       "Bash(curl -sS -o /dev/null -w \"localhost:3000 HTTP=%{http_code} time=%{time_total}s\\\\n\" --max-time 5 http://localhost:3000/docs)",
-      "Bash(/home/enyelberth/Github/gsolsumed_backend/node_modules/.bin/tsc --noEmit -p tsconfig.json)"
+      "Bash(/home/enyelberth/Github/gsolsumed_backend/node_modules/.bin/tsc --noEmit -p tsconfig.json)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git commit -m 'chore\\(env\\): cambiar API_BASE_URL a clientes.grupo-solsumed.com *)"
     ]
   }
 }
