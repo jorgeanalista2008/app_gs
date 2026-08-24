@@ -185,4 +185,24 @@ class AuthService {
       'photo': 'user.png',
     };
   }
+
+  /// Establece sesión de usuario sin validar contraseña
+  /// Usado para biometric login (ya validado por huella/cara)
+  Future<void> setUserSession({
+    required String userId,
+    required String username,
+    required String role,
+  }) async {
+    try {
+      final user = await _db.getUsuario(userId);
+      if (user != null) {
+        _currentUser = user;
+        await _saveSession(user);
+        print('✅ [AuthService] Sesión biométrica establecida: $userId');
+      }
+    } catch (e) {
+      print('❌ [AuthService] Error estableciendo sesión biométrica: $e');
+      rethrow;
+    }
+  }
 }

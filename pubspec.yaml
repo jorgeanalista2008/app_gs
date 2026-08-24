@@ -30,6 +30,7 @@ dependencies:
   mobile_scanner: ^5.0.0                 # Escáner QR
   geolocator: ^12.0.0                    # Ubicación GPS
   image_picker: ^1.2.1                   # Cámara y galería
+  local_auth: ^2.3.0                     # Autenticación biométrica (huella, cara, PIN)
   
   # Formato
   intl: ^0.18.0                          # Internacionalización y fechas

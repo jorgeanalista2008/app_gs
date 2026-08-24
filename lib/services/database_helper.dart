@@ -20,7 +20,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 14,
+      version: 15,
       onCreate: (db, version) async {
         await _createTables(db);
       },
@@ -110,6 +110,9 @@ class DatabaseHelper {
         // Migración v13→v14: Tablas para Survey Packs
         if (oldVersion < 14) {
           await _createSurveyPacksTables(db);
+        }
+        if (oldVersion < 15) {
+          await _createBiometricSettingsTable(db);
         }
       },
     );
@@ -290,9 +293,19 @@ class DatabaseHelper {
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_ubicaciones_device ON ubicaciones(device_id, recorded_at)',
     );
+
+    // Tabla: biometric_settings (login con huella/cara/PIN)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS biometric_settings (
+        key TEXT PRIMARY KEY,
+        username TEXT NOT NULL,
+        value TEXT,
+        created_at TEXT
+      )
+    ''');
   }
 
-  /// Crea tablas para Survey Packs (migración v13→v14)
+  /// Crea tablas para Biometric Settings (migración v14→v15)
   Future<void> _createSurveyPacksTables(Database db) async {
     // Tabla: survey_packs (packs descargados del servidor)
     await db.execute('''
@@ -1281,5 +1294,22 @@ class DatabaseHelper {
       where: 'sincronizado = 1 AND recorded_at < ?',
       whereArgs: [threshold],
     );
+  }
+
+  /// Crea tabla para configuración biométrica (migración v14→v15)
+  Future<void> _createBiometricSettingsTable(Database db) async {
+    try {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS biometric_settings (
+          key TEXT PRIMARY KEY,
+          username TEXT NOT NULL,
+          value TEXT,
+          created_at TEXT
+        )
+      ''');
+      print('✅ [DatabaseHelper] Tabla biometric_settings creada');
+    } catch (e) {
+      print('⚠️  [DatabaseHelper] Error creando tabla biometric_settings: $e');
+    }
   }
 }
