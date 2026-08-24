@@ -20,7 +20,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 13,
+      version: 14,
       onCreate: (db, version) async {
         await _createTables(db);
       },
@@ -106,6 +106,10 @@ class DatabaseHelper {
             await db.execute(
                 'CREATE INDEX IF NOT EXISTS idx_ubicaciones_device ON ubicaciones(device_id, recorded_at)');
           } catch (_) {}
+        }
+        // Migración v13→v14: Tablas para Survey Packs
+        if (oldVersion < 14) {
+          await _createSurveyPacksTables(db);
         }
       },
     );
@@ -286,6 +290,136 @@ class DatabaseHelper {
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_ubicaciones_device ON ubicaciones(device_id, recorded_at)',
     );
+  }
+
+  /// Crea tablas para Survey Packs (migración v13→v14)
+  Future<void> _createSurveyPacksTables(Database db) async {
+    // Tabla: survey_packs (packs descargados del servidor)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS survey_packs (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        pack_type TEXT NOT NULL,
+        description TEXT,
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT,
+        updated_at TEXT,
+        deleted_at TEXT
+      )
+    ''');
+
+    // Tabla: survey_pack_questions (relación pack ↔ pregunta)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS survey_pack_questions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pack_id TEXT NOT NULL,
+        question_id INTEGER NOT NULL,
+        sort_order INTEGER DEFAULT 0,
+        is_required INTEGER DEFAULT 1,
+        FOREIGN KEY (pack_id) REFERENCES survey_packs(id),
+        UNIQUE (pack_id, question_id)
+      )
+    ''');
+
+    // Tabla: survey_assignments (asignaciones de packs a clientes)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS survey_assignments (
+        id INTEGER PRIMARY KEY,
+        customer_id TEXT NOT NULL,
+        pack_id TEXT NOT NULL,
+        assigned_by_user_id TEXT,
+        assigned_at TEXT NOT NULL,
+        status TEXT DEFAULT 'PENDING',
+        completed_at TEXT,
+        completed_by_user_id TEXT,
+        notes TEXT,
+        FOREIGN KEY (pack_id) REFERENCES survey_packs(id),
+        FOREIGN KEY (customer_id) REFERENCES clientes(id)
+      )
+    ''');
+
+    // Tabla: cached_survey_packs (caché local de packs)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS cached_survey_packs (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        pack_type TEXT,
+        description TEXT,
+        questions TEXT,
+        cached_at TEXT
+      )
+    ''');
+
+    // Tabla: cached_customers (caché local de datos 360)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS cached_customers (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        code_client_profit TEXT,
+        phone TEXT,
+        email TEXT,
+        address TEXT,
+        latitude REAL,
+        longitude REAL,
+        is_new_customer INTEGER,
+        created_at TEXT,
+        last_sync_at TEXT,
+        FOREIGN KEY (id) REFERENCES clientes(id)
+      )
+    ''');
+
+    // Tabla: pending_survey_answers (respuestas pendientes de sincronizar)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS pending_survey_answers (
+        assignment_id INTEGER,
+        customer_id TEXT NOT NULL,
+        pack_id TEXT NOT NULL,
+        answers TEXT NOT NULL,
+        status TEXT DEFAULT 'PENDING',
+        created_at TEXT NOT NULL,
+        synced_at TEXT,
+        last_sync_attempt TEXT,
+        sync_attempts INTEGER DEFAULT 0,
+        PRIMARY KEY (customer_id, pack_id, created_at),
+        FOREIGN KEY (customer_id) REFERENCES clientes(id),
+        FOREIGN KEY (pack_id) REFERENCES survey_packs(id)
+      )
+    ''');
+
+    // Tabla: failed_survey_submissions (intentos fallidos de sincronización)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS failed_survey_submissions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        assignment_id INTEGER,
+        customer_id TEXT,
+        answers TEXT,
+        error_message TEXT,
+        attempt_count INTEGER DEFAULT 0,
+        last_attempt_at TEXT,
+        next_retry_at TEXT,
+        backoff_level INTEGER DEFAULT 0,
+        FOREIGN KEY (customer_id) REFERENCES clientes(id)
+      )
+    ''');
+
+    // Crear índices para optimizar queries
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_survey_packs_active ON survey_packs(is_active, deleted_at)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_survey_assignments_status ON survey_assignments(status, customer_id)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_pending_answers_status ON pending_survey_answers(status, customer_id)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_failed_submissions_retry ON failed_survey_submissions(next_retry_at, attempt_count)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_cached_survey_packs_type ON cached_survey_packs(pack_type)',
+    );
+
+    print('✅ Survey Packs tables created (v13→v14)');
   }
 
   /// Agrega columnas de sync timestamps a tablas existentes (migración v5→v6).
