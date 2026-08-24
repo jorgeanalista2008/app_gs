@@ -3,8 +3,10 @@ import '../core/app_colors.dart';
 import '../atoms/app_button.dart';
 import '../atoms/app_text_field.dart';
 import '../services/auth_service.dart';
+import '../services/biometric_service.dart';
 import '../services/location_tracking_service.dart';
 import 'home_page.dart';
+import 'biometric_login_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -34,6 +36,39 @@ class _LoginPageState extends State<LoginPage> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const HomePage()),
+        );
+      }
+    }
+  }
+
+  Future<void> _checkBiometricAndNavigate() async {
+    try {
+      final bioService = BiometricService.instance;
+      final canUse = await bioService.canUseBiometrics;
+
+      if (!canUse) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⚠️ Biometría no disponible en este dispositivo'),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Navegar a BiometricLoginPage
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const BiometricLoginPage()),
+        );
+      }
+    } catch (e) {
+      print('❌ Error verificando biometría: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error al verificar biometría')),
         );
       }
     }
@@ -209,6 +244,59 @@ class _LoginPageState extends State<LoginPage> {
               ),
 
               const SizedBox(height: 20),
+
+              // Divider con texto
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    Expanded(child: Divider(color: Colors.grey[300])),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        'O',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                      ),
+                    ),
+                    Expanded(child: Divider(color: Colors.grey[300])),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Botón de Biometric Login
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _checkBiometricAndNavigate,
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      side: BorderSide(color: AppColors.primaryColor, width: 2),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    icon: const Icon(
+                      Icons.fingerprint,
+                      size: 24,
+                      color: AppColors.primaryColor,
+                    ),
+                    label: const Text(
+                      'LOGIN CON BIOMETRÍA',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primaryColor,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 30),
 
               // Footer
               Text(

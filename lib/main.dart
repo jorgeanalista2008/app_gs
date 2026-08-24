@@ -11,6 +11,8 @@ import 'services/location_tracking_service.dart';
 import 'repositories/cliente_repository.dart';
 import 'repositories/pregunta_repository.dart';
 import 'pages/login_page.dart';
+import 'pages/biometric_login_page.dart';
+import 'pages/home_page.dart';
 import 'core/app_colors.dart';
 
 void main() async {
@@ -54,6 +56,11 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
       home: const LoginPage(),
+      routes: {
+        '/login': (context) => const LoginPage(),
+        '/biometric': (context) => const BiometricLoginPage(),
+        '/home': (context) => const HomePage(),
+      },
     );
   }
 }

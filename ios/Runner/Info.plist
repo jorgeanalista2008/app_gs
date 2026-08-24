@@ -58,5 +58,9 @@
 		<string>location</string>
 		<string>fetch</string>
 	</array>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Necesitamos acceso a Face ID para autenticación rápida</string>
+	<key>NSBiometricsUsageDescription</key>
+	<string>Necesitamos acceso a biometría para autenticación segura</string>
 </dict>
 </plist>
