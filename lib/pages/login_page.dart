@@ -20,11 +20,26 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _passController = TextEditingController();
   final AuthService _authService = AuthService.instance;
   bool _isLoading = false;
+  bool _canUseBiometrics = false;
 
   @override
   void initState() {
     super.initState();
     _tryAutoLogin();
+    _checkBiometricAvailability();
+  }
+
+  /// Verifica si el device tiene biometría disponible
+  Future<void> _checkBiometricAvailability() async {
+    try {
+      final bioService = BiometricService.instance;
+      final canUse = await bioService.canUseBiometrics;
+      if (mounted) {
+        setState(() => _canUseBiometrics = canUse);
+      }
+    } catch (e) {
+      print('⚠️  [LoginPage] Error verificando biometría: $e');
+    }
   }
 
   /// Intenta restaurar sesión guardada
@@ -245,58 +260,61 @@ class _LoginPageState extends State<LoginPage> {
 
               const SizedBox(height: 20),
 
-              // Divider con texto
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  children: [
-                    Expanded(child: Divider(color: Colors.grey[300])),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(
-                        'O',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              // Divider + Biometric Button (solo si hay biometría)
+              if (_canUseBiometrics) ...[
+                // Divider con texto
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    children: [
+                      Expanded(child: Divider(color: Colors.grey[300])),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'O',
+                          style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                        ),
                       ),
-                    ),
-                    Expanded(child: Divider(color: Colors.grey[300])),
-                  ],
+                      Expanded(child: Divider(color: Colors.grey[300])),
+                    ],
+                  ),
                 ),
-              ),
 
-              const SizedBox(height: 20),
+                const SizedBox(height: 20),
 
-              // Botón de Biometric Login
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _checkBiometricAndNavigate,
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      side: BorderSide(color: AppColors.primaryColor, width: 2),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                // Botón de Biometric Login
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _checkBiometricAndNavigate,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        side: BorderSide(color: AppColors.primaryColor, width: 2),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
-                    ),
-                    icon: const Icon(
-                      Icons.fingerprint,
-                      size: 24,
-                      color: AppColors.primaryColor,
-                    ),
-                    label: const Text(
-                      'LOGIN CON BIOMETRÍA',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                      icon: const Icon(
+                        Icons.fingerprint,
+                        size: 24,
                         color: AppColors.primaryColor,
+                      ),
+                      label: const Text(
+                        'LOGIN CON BIOMETRÍA',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primaryColor,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
 
-              const SizedBox(height: 30),
+                const SizedBox(height: 30),
+              ],
 
               // Footer
               Text(
