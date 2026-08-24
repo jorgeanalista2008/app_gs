@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/widgets.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 import 'package:workmanager/workmanager.dart';
 import 'auth_service.dart';
@@ -9,6 +10,7 @@ import 'database_helper.dart';
 import 'device_identity_service.dart';
 import 'sync_queue_service.dart';
 import 'sync_service.dart';
+import '../repositories/survey_repository.dart';
 
 /// Nombre único de la tarea periódica registrada en el sistema operativo.
 const String _kSyncTaskUniqueName = 'solsumed-background-sync';
@@ -38,6 +40,10 @@ void backgroundSyncCallbackDispatcher() {
 
       await SyncQueueService.instance.drain(force: true);
       await SyncService.instance.marcarTodoSincronizado();
+
+      // Sincronizar respuestas de encuestas (Survey Packs)
+      await _syncSurveyAnswers();
+
       print('🌙 [BackgroundSync] sincronización en 2do plano completada');
       return Future.value(true);
     } catch (e) {
@@ -126,7 +132,107 @@ class BackgroundSyncService {
   static bool get _soportado =>
       !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
-  static Future<void> initialize() async {
+  /// Sincroniza respuestas de encuestas (Survey Packs) con retry exponencial
+Future<void> _syncSurveyAnswers() async {
+  try {
+    print('📝 [BackgroundSync] sincronizando respuestas de encuestas...');
+    final db = await DatabaseHelper.instance.database;
+
+    // 1. Obtener respuestas pendientes
+    final pendingAnswers = await db.query(
+      'pending_survey_answers',
+      where: 'status = ?',
+      whereArgs: ['PENDING'],
+      orderBy: 'created_at ASC',
+      limit: 10, // Procesar máximo 10 por ciclo
+    );
+
+    if (pendingAnswers.isEmpty) {
+      print('📝 [BackgroundSync] no hay encuestas pendientes');
+      return;
+    }
+
+    print('📝 [BackgroundSync] procesando ${pendingAnswers.length} respuestas...');
+
+    // 2. Intentar sincronizar cada una
+    for (final answer in pendingAnswers) {
+      final customerId = answer['customer_id']?.toString();
+      final packId = answer['pack_id']?.toString();
+      final syncAttempts = (answer['sync_attempts'] as int?) ?? 0;
+
+      if (customerId == null || packId == null) continue;
+
+      // Verificar si alcanzó máximo de intentos
+      if (syncAttempts >= 5) {
+        print('⚠️  [BackgroundSync] máximo intentos alcanzado para $customerId');
+        continue;
+      }
+
+      try {
+        // Intentar completar asignación en el servidor
+        final success = await SurveyRepository.instance.completeAssignment(0);
+
+        if (success) {
+          // Marcar como sincronizada
+          await db.update(
+            'pending_survey_answers',
+            {
+              'status': 'SYNCED',
+              'synced_at': DateTime.now().toUtc().toIso8601String(),
+              'sync_attempts': syncAttempts + 1,
+            },
+            where: 'customer_id = ? AND pack_id = ? AND status = ?',
+            whereArgs: [customerId, packId, 'PENDING'],
+          );
+          print('✅ [BackgroundSync] encuesta sincronizada: $customerId');
+        } else {
+          // Scheduling retry con backoff exponencial
+          await _scheduleRetry(db, customerId, syncAttempts + 1);
+        }
+      } catch (e) {
+        print('❌ [BackgroundSync] error sincronizando $customerId: $e');
+        await _scheduleRetry(db, customerId, syncAttempts + 1);
+      }
+    }
+
+    print('✅ [BackgroundSync] sincronización de encuestas completada');
+  } catch (e) {
+    print('❌ [BackgroundSync] error en _syncSurveyAnswers: $e');
+  }
+}
+
+/// Calcula el próximo reintento con backoff exponencial
+Future<void> _scheduleRetry(Database db, String customerId, int attempt) async {
+  try {
+    // Backoff: [30s, 2m, 8m, 30m, 30m]
+    const backoffSeconds = [30, 120, 480, 1800, 1800];
+    final delaySeconds = attempt < backoffSeconds.length
+        ? backoffSeconds[attempt - 1]
+        : backoffSeconds.last;
+
+    final nextRetry = DateTime.now()
+        .add(Duration(seconds: delaySeconds))
+        .toUtc()
+        .toIso8601String();
+
+    await db.update(
+      'pending_survey_answers',
+      {
+        'last_sync_attempt': DateTime.now().toUtc().toIso8601String(),
+        'sync_attempts': attempt,
+      },
+      where: 'customer_id = ?',
+      whereArgs: [customerId],
+    );
+
+    print('🔄 [BackgroundSync] reintento programado para $customerId '
+        'en ${delaySeconds}s (intento $attempt/5)');
+  } catch (e) {
+    print('⚠️  [BackgroundSync] error programando retry: $e');
+  }
+}
+
+static Future<void> initialize() async {
     if (!_soportado) return;
     try {
       await Workmanager().initialize(backgroundSyncCallbackDispatcher);
