@@ -3,9 +3,13 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../models/visita_model.dart';
+import '../models/customer_360_model.dart';
 import '../repositories/encuesta_repository.dart';
+import '../repositories/survey_repository.dart';
 import '../services/database_helper.dart';
 import '../models/pregunta_model.dart';
+import '../molecules/customer_360_card.dart';
+import '../organisms/survey_form_widget.dart';
 
 bool _looksLikeFilePath(String raw) =>
     raw.startsWith('/') || raw.startsWith('file:') || (raw.length > 2 && raw[1] == ':');
@@ -32,6 +36,7 @@ class DetalleVisitaPage extends StatefulWidget {
 
 class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
   final EncuestaRepository _encuestaRepo = EncuestaRepository();
+  final SurveyRepository _surveyRepo = SurveyRepository.instance;
   bool _isLoading = true;
   List<dynamic> _respuestas = [];
   double? _lat;
@@ -39,6 +44,10 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
   String? _foto1Raw;
   String? _foto2Raw;
   final Map<String, List<PreguntaOption>> _preguntasOpciones = {};
+
+  // Survey Packs
+  Customer360? _customer360;
+  bool _loadingCustomer360 = false;
 
   @override
   void initState() {
@@ -69,10 +78,29 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
         _foto1Raw = row['foto1_path'] as String?;
         _foto2Raw = row['foto2_path'] as String?;
       }
+
+      // Cargar ficha 360 del cliente (Survey Packs)
+      _loadCustomer360();
     } catch (e) {
       debugPrint('Error cargando detalle de visita: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadCustomer360() async {
+    setState(() => _loadingCustomer360 = true);
+    try {
+      final customer360 = await _surveyRepo.getCustomer360(
+        customerId: widget.visita.customerId,
+      );
+      if (mounted) {
+        setState(() => _customer360 = customer360);
+      }
+    } catch (e) {
+      debugPrint('Error cargando ficha 360: $e');
+    } finally {
+      if (mounted) setState(() => _loadingCustomer360 = false);
     }
   }
 
@@ -317,6 +345,48 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
+
+                  // FICHA 360 + ENCUESTA SURVEY PACKS
+                  if (_customer360 != null) ...[
+                    // Ficha 360 del cliente
+                    Card(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: 2,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Customer360Card(customer360: _customer360!),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Formulario de encuesta (si hay pack recomendado)
+                    if (_customer360!.recommendedSurvey != null)
+                      Card(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        elevation: 2,
+                        child: SurveyFormWidget(
+                          pack: _customer360!.recommendedSurvey!,
+                          customerId: widget.visita.customerId,
+                          onCompleted: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('✅ Encuesta completada'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+                  ] else if (_loadingCustomer360)
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.primaryColor,
+                        ),
+                      ),
+                    ),
 
                   // CARD RESPUESTAS DE ENCUESTA
                   Card(
