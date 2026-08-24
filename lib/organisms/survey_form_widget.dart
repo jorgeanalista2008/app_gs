@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../models/survey_pack_model.dart';
 import '../models/survey_question_model.dart';
@@ -233,7 +232,6 @@ class _SurveyFormWidgetState extends State<SurveyFormWidget> {
   }
 
   Widget _buildRatingQuestion(SurveyQuestion question) {
-    final options = question.responseOptions ?? [];
     final selected = answers[question.id];
 
     return Row(

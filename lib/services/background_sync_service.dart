@@ -158,9 +158,10 @@ Future<void> _syncSurveyAnswers() async {
     for (final answer in pendingAnswers) {
       final customerId = answer['customer_id']?.toString();
       final packId = answer['pack_id']?.toString();
+      final assignmentId = answer['assignment_id'] as int?;
       final syncAttempts = (answer['sync_attempts'] as int?) ?? 0;
 
-      if (customerId == null || packId == null) continue;
+      if (customerId == null || packId == null || assignmentId == null) continue;
 
       // Verificar si alcanzó máximo de intentos
       if (syncAttempts >= 5) {
@@ -170,7 +171,7 @@ Future<void> _syncSurveyAnswers() async {
 
       try {
         // Intentar completar asignación en el servidor
-        final success = await SurveyRepository.instance.completeAssignment(0);
+        final success = await SurveyRepository.instance.completeAssignment(assignmentId);
 
         if (success) {
           // Marcar como sincronizada

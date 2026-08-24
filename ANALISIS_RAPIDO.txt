@@ -1,0 +1,170 @@
+ANÁLISIS RÁPIDO: CAMBIOS NECESARIOS
+Integración de Survey Packs en App Flutter
+
+================================================================================
+ESTADO ACTUAL
+================================================================================
+
+✅ Encuestas LOCALES funcionales (offline-only)
+✅ Tablas SQLite: encuestas, preguntas, respuestas_pendientes
+✅ EncuestaRepository con métodos básicos
+✅ GenericRepository con postOnline(), getListOnline()
+✅ SyncService + SyncQueueService para sincronización
+✅ DetalleVisitaPage integrada con formularios
+
+❌ FALTA: Survey Packs del backend
+❌ FALTA: Ficha 360 completa del cliente
+❌ FALTA: Recomendación automática de encuestas
+❌ FALTA: Sincronización automática en background
+
+================================================================================
+10 CAMBIOS NECESARIOS
+================================================================================
+
+1. 🆕 CREAR: 4 nuevos modelos                                   [~30 min]
+   • SurveyPack (plantilla de encuesta)
+   • SurveyQuestion (pregunta dentro de pack)
+   • Customer360 (ficha completa del cliente)
+   • SurveyAssignment (asignación a cliente)
+
+2. 🆕 CREAR: 5 nuevas tablas SQLite                             [~1 hora]
+   • survey_packs (packs del servidor)
+   • survey_pack_questions (preguntas por pack)
+   • survey_assignments (asignaciones)
+   • cached_survey_packs (caché local)
+   • pending_survey_answers (respuestas pendientes)
+   • failed_survey_submissions (intentos fallidos)
+
+3. 🆕 CREAR: SurveyRepository                                   [~1.5 horas]
+   • getCustomer360(customerId)      ← CLAVE
+   • cacheSurveyPack(pack)
+   • savePendingAnswer(...)
+   • completeAssignment(id)
+   • getPendingAnswers() (para retry)
+
+4. ✏️  MODIFICAR: EncuestaRepository                             [~30 min]
+   • Agregar: syncPendingAnswers()
+   • Agregar: getSurveyPacks()
+   • Agregar: markAssignmentComplete()
+   • Mantener: métodos existentes (sin cambios)
+
+5. 🆕 CREAR: SurveyFormWidget                                   [~1 hora]
+   • Renderizar preguntas dinámicamente
+   • Capturar respuestas
+   • Guardar en BD local
+   • Mostrar estado de sincronización
+
+6. 🆕 CREAR: Customer360Card                                    [~45 min]
+   • Datos cliente: nombre, contacto, dirección
+   • Stats: visitas totales, última fecha
+   • Profit: USD total, últimos 30 días
+   • Encuesta recomendada (si la hay)
+
+7. ✏️  MODIFICAR: DetalleVisitaPage                              [~1 hora]
+   • Cargar ficha 360 al abrir página
+   • Mostrar Customer360Card
+   • Integrar SurveyFormWidget
+   • Capturar y guardar respuestas
+
+8. ✏️  MODIFICAR: BackgroundSyncService                           [~1.5 horas]
+   • Agregar: syncSurveyAnswers()
+   • Retry exponencial: [30s, 2m, 8m, 30m, 30m]
+   • Máximo 5 intentos por respuesta
+   • Marcar como completada en backend
+
+9. ✔️  VALIDAR: Endpoints API del Backend                        [CRÍTICO]
+   • POST /survey/auth/customers/:customerId/360
+   • POST /survey/auth/assignments/:assignmentId/complete
+   • POST /salesperson/auth/answers (ya existe)
+
+10. 🧪 TESTING E Integración                                    [~1 hora]
+    • Offline: obtener ficha + responder
+    • Online: sincronización automática
+    • Retry: funciona con backoff exponencial
+    • E2E: flujo completo
+
+================================================================================
+TIMELINE TOTAL
+================================================================================
+
+Fase 1: Datos (modelos + BD + SurveyRepository)      4 horas    ← CRÍTICA
+Fase 2: UI (widgets + DetalleVisitaPage)             3 horas    ← ALTA
+Fase 3: Sincronización (BackgroundSync + retry)      2 horas    ← ALTA
+Fase 4: Testing E2E                                  1 hora     ← QA
+────────────────────────────────────────────────────────────────────────
+TOTAL: 10 HORAS = 1 día de trabajo + 2 horas
+
+================================================================================
+FICHEROS A CREAR/MODIFICAR
+================================================================================
+
+NUEVOS (8 archivos):
+├─ lib/models/survey_pack_model.dart                 🆕
+├─ lib/models/survey_question_model.dart             🆕
+├─ lib/models/customer_360_model.dart                🆕
+├─ lib/models/survey_assignment_model.dart           🆕
+├─ lib/repositories/survey_repository.dart           🆕
+├─ lib/organisms/survey_form_widget.dart             🆕
+├─ lib/molecules/customer_360_card.dart              🆕
+└─ SURVEY_IMPLEMENTATION_PLAN.md                     🆕 (documentación)
+
+MODIFICADOS (4 archivos):
+├─ lib/services/database_helper.dart                 ✏️  (v10→v11)
+├─ lib/repositories/encuesta_repository.dart         ✏️  (agregar métodos)
+├─ lib/pages/detalle_visita_page.dart                ✏️  (integración)
+└─ lib/services/background_sync_service.dart         ✏️  (agregar sync)
+
+REVISADOS (sin cambios):
+├─ lib/repositories/generic_repository.dart          ✅
+├─ lib/services/auth_service.dart                    ✅
+├─ lib/services/sync_service.dart                    ✅
+└─ lib/services/sync_queue_service.dart              ✅
+
+================================================================================
+DECISIONES DE DISEÑO
+================================================================================
+
+✓ Modelos separados: SurveyPack vs EncuestaModel (no mezclar)
+✓ Tablas caché: Datos servidor + copia local para offline
+✓ Retry exponencial: En tabla separada para tracking
+✓ Autenticación: Email+password para /survey/auth/* (no JWT)
+✓ IDs: UUID para packs, INTEGER para respuestas locales
+✓ Background sync: WorkManager (cada 15 minutos)
+
+================================================================================
+VALIDACIÓN PRE-IMPLEMENTACIÓN
+================================================================================
+
+BACKEND (debe estar listo ANTES de empezar):
+□ Endpoint POST /survey/auth/customers/:customerId/360
+□ Endpoint POST /survey/auth/assignments/:id/complete
+□ Survey packs creados y con preguntas asignadas
+□ Documentación de respuesta actualizada
+
+APP FLUTTER (verificar antes):
+□ Modelos actuales no conflictúan
+□ DatabaseHelper soporta migrations
+□ AuthService puede obtener credenciales locales
+□ GenericRepository soporta email+password (no solo JWT)
+
+================================================================================
+PRÓXIMOS PASOS
+================================================================================
+
+1️⃣  Revisar este análisis con el equipo
+2️⃣  Validar que backend tiene endpoints listos
+3️⃣  Crear models (Fase 1)
+4️⃣  Crear tablas SQLite (Fase 1)
+5️⃣  Crear SurveyRepository (Fase 1)
+6️⃣  [CONTINUAR CON FASES 2-4]
+
+📖 Documentación detallada en:
+   • SURVEY_IMPLEMENTATION_PLAN.md (completo)
+   • SURVEY_CHANGES_SUMMARY.md (ejecutivo)
+   • SURVEY_SETUP.md (backend)
+   • SURVEY_MOBILE_INTEGRATION.md (endpoints)
+
+================================================================================
+¿LISTO PARA IMPLEMENTAR? 🚀
+Responde: ¿Empezamos con la Fase 1 (Modelos + BD)?
+================================================================================
