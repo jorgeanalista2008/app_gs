@@ -119,20 +119,7 @@ Future<void> _capturarUbicacionBackground() async {
   }
 }
 
-/// Registra la sincronización periódica en segundo plano usando el
-/// WorkManager nativo (Android) / BGTaskScheduler (iOS), condicionada a que
-/// haya red disponible. Esto permite subir lo hecho offline aun con la app
-/// cerrada, a diferencia de [SyncQueueService.start] que sólo reacciona
-/// mientras el proceso de Flutter sigue vivo.
-///
-/// Limitación del SO: el intervalo mínimo que Android/iOS permiten para
-/// tareas periódicas es ~15 minutos, y puede demorarse más por Doze/ahorro
-/// de batería. No es un disparo instantáneo como el listener en primer plano.
-class BackgroundSyncService {
-  static bool get _soportado =>
-      !kIsWeb && (Platform.isAndroid || Platform.isIOS);
-
-  /// Sincroniza respuestas de encuestas (Survey Packs) con retry exponencial
+/// Sincroniza respuestas de encuestas (Survey Packs) con retry exponencial
 Future<void> _syncSurveyAnswers() async {
   try {
     print('📝 [BackgroundSync] sincronizando respuestas de encuestas...');
@@ -233,7 +220,20 @@ Future<void> _scheduleRetry(Database db, String customerId, int attempt) async {
   }
 }
 
-static Future<void> initialize() async {
+/// Registra la sincronización periódica en segundo plano usando el
+/// WorkManager nativo (Android) / BGTaskScheduler (iOS), condicionada a que
+/// haya red disponible. Esto permite subir lo hecho offline aun con la app
+/// cerrada, a diferencia de [SyncQueueService.start] que sólo reacciona
+/// mientras el proceso de Flutter sigue vivo.
+///
+/// Limitación del SO: el intervalo mínimo que Android/iOS permiten para
+/// tareas periódicas es ~15 minutos, y puede demorarse más por Doze/ahorro
+/// de batería. No es un disparo instantáneo como el listener en primer plano.
+class BackgroundSyncService {
+  static bool get _soportado =>
+      !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
+  static Future<void> initialize() async {
     if (!_soportado) return;
     try {
       await Workmanager().initialize(backgroundSyncCallbackDispatcher);
