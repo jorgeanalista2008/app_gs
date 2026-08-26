@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'conflict_resolver.dart';
@@ -20,7 +21,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 15,
+      version: 16,
       onCreate: (db, version) async {
         await _createTables(db);
       },
@@ -113,6 +114,20 @@ class DatabaseHelper {
         }
         if (oldVersion < 15) {
           await _createBiometricSettingsTable(db);
+        }
+        if (oldVersion < 16) {
+          for (final col in const [
+            'pack_id TEXT',
+            'pack_name TEXT',
+            'pack_type TEXT',
+            'question_ids TEXT',
+          ]) {
+            try {
+              await db.execute('ALTER TABLE visitas ADD COLUMN $col');
+            } catch (e) {
+              print('Column $col already exists in visitas: $e');
+            }
+          }
         }
       },
     );
@@ -218,7 +233,11 @@ class DatabaseHelper {
         sincronizado INTEGER DEFAULT 0,
         fecha_sync TEXT,
         updated_at TEXT,
-        server_updated_at TEXT
+        server_updated_at TEXT,
+        pack_id TEXT,
+        pack_name TEXT,
+        pack_type TEXT,
+        question_ids TEXT
       )
     ''');
 
@@ -699,6 +718,10 @@ class DatabaseHelper {
           'fecha_sync': nowIso,
           'updated_at': serverUpdatedAtIso ?? nowIso,
           'server_updated_at': serverUpdatedAtIso,
+          'pack_id': visita['pack_id'],
+          'pack_name': visita['pack_name'],
+          'pack_type': visita['pack_type'],
+          'question_ids': _encodeJson(visita['question_ids']),
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
@@ -1311,5 +1334,14 @@ class DatabaseHelper {
     } catch (e) {
       print('⚠️  [DatabaseHelper] Error creando tabla biometric_settings: $e');
     }
+  }
+
+  String? _encodeJson(dynamic value) {
+    if (value == null) return null;
+    if (value is String) return value;
+    if (value is List) {
+      return jsonEncode(value);
+    }
+    return null;
   }
 }

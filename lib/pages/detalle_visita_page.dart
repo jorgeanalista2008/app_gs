@@ -4,12 +4,12 @@ import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../models/visita_model.dart';
 import '../models/customer_360_model.dart';
+import '../models/encuesta_model.dart';
 import '../repositories/encuesta_repository.dart';
 import '../repositories/survey_repository.dart';
 import '../services/database_helper.dart';
 import '../models/pregunta_model.dart';
 import '../molecules/customer_360_card.dart';
-import '../organisms/survey_form_widget.dart';
 
 bool _looksLikeFilePath(String raw) =>
     raw.startsWith('/') || raw.startsWith('file:') || (raw.length > 2 && raw[1] == ':');
@@ -49,6 +49,10 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
   Customer360? _customer360;
   bool _loadingCustomer360 = false;
 
+  // Encuesta por Visita
+  EncuestaModel? _encuestaVisita;
+  bool _loadingEncuestaVisita = false;
+
   @override
   void initState() {
     super.initState();
@@ -79,12 +83,29 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
         _foto2Raw = row['foto2_path'] as String?;
       }
 
+      // Cargar encuesta específica de la visita
+      _loadEncuestaVisita();
+
       // Cargar ficha 360 del cliente (Survey Packs)
       _loadCustomer360();
     } catch (e) {
       debugPrint('Error cargando detalle de visita: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadEncuestaVisita() async {
+    setState(() => _loadingEncuestaVisita = true);
+    try {
+      final encuesta = await _encuestaRepo.getEncuestaVisita(widget.visita.id);
+      if (mounted) {
+        setState(() => _encuestaVisita = encuesta);
+      }
+    } catch (e) {
+      debugPrint('Error cargando encuesta de visita: $e');
+    } finally {
+      if (mounted) setState(() => _loadingEncuestaVisita = false);
     }
   }
 
@@ -359,22 +380,101 @@ class _DetalleVisitaPageState extends State<DetalleVisitaPage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Formulario de encuesta (si hay pack recomendado)
-                    if (_customer360!.recommendedSurvey != null)
+                    // Formulario de encuesta asignada a esta visita
+                    if (_loadingEncuestaVisita)
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.primaryColor,
+                          ),
+                        ),
+                      )
+                    else if (_encuestaVisita != null && _encuestaVisita!.questions.isNotEmpty)
                       Card(
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         elevation: 2,
-                        child: SurveyFormWidget(
-                          pack: _customer360!.recommendedSurvey!,
-                          customerId: widget.visita.customerId,
-                          onCompleted: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('✅ Encuesta completada'),
-                                duration: Duration(seconds: 2),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.assignment, color: AppColors.primaryColor, size: 20),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _encuestaVisita!.packName ?? 'Encuesta personalizada',
+                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            );
-                          },
+                              const Divider(height: 24),
+                              ..._encuestaVisita!.questions.map((pregunta) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 16),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        pregunta.description,
+                                        style: const TextStyle(fontWeight: FontWeight.w500),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      // Aquí va el widget de respuesta según el tipo
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          border: Border.all(color: Colors.grey[300]!),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          'Tipo: ${pregunta.questionType}',
+                                          style: TextStyle(color: Colors.grey[600]),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                            ],
+                          ),
+                        ),
+                      )
+                    else if (_encuestaVisita != null)
+                      Card(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        elevation: 2,
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Center(
+                            child: Column(
+                              children: [
+                                Icon(Icons.assignment_outlined, size: 40, color: Colors.grey[400]),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Esta visita no tiene pack asignado',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontStyle: FontStyle.italic,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Seleccione un pack al crear la visita',
+                                  style: TextStyle(
+                                    color: Colors.grey[500],
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     const SizedBox(height: 16),

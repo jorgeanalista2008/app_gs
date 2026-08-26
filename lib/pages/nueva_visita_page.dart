@@ -4,6 +4,7 @@ import '../core/app_colors.dart';
 import '../services/database_helper.dart';
 import '../models/pregunta_model.dart';
 import '../atoms/app_text_field.dart';
+import '../repositories/survey_pack_repository.dart';
 
 class NuevaVisitaPage extends StatefulWidget {
   const NuevaVisitaPage({super.key});
@@ -14,20 +15,22 @@ class NuevaVisitaPage extends StatefulWidget {
 
 class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
   final DatabaseHelper _db = DatabaseHelper.instance;
+  final SurveyPackRepository _packRepo = SurveyPackRepository();
   final TextEditingController _notasController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
 
   List<Map<String, dynamic>> _clientes = [];
   List<Map<String, dynamic>> _clientesFiltrados = [];
-  List<Map<String, dynamic>> _encuestas = [];
+  List<SurveyPackModel> _packs = [];
 
   Map<String, dynamic>? _clienteSeleccionado;
-  Map<String, dynamic>? _encuestaSeleccionada;
+  SurveyPackModel? _packSeleccionado;
   int _prioridad = 1;
-  int _paso = 1; // 1=Cliente, 2=Encuesta, 3=Notas
+  int _paso = 1; // 1=Cliente, 2=Pack de Preguntas, 3=Notas
 
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _loadingPacks = false;
 
   @override
   void initState() {
@@ -39,12 +42,12 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
     setState(() => _isLoading = true);
     try {
       final clientes = await _db.getClientes();
-      final encuestas = await _db.getPlantillasEncuestas();
+      final packs = await _packRepo.getAvailablePacks();
       if (mounted) {
         setState(() {
           _clientes = clientes;
           _clientesFiltrados = clientes;
-          _encuestas = encuestas;
+          _packs = packs;
           _isLoading = false;
         });
       }
@@ -70,7 +73,7 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
   }
 
   Future<void> _guardarVisita() async {
-    if (_clienteSeleccionado == null || _encuestaSeleccionada == null) return;
+    if (_clienteSeleccionado == null || _packSeleccionado == null) return;
 
     setState(() => _isSaving = true);
 
@@ -82,7 +85,11 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
       final lastDay = DateTime(now.year, now.month + 1, 0).day.toString().padLeft(2, '0');
 
       final db = await _db.database;
-      
+
+      // Obtener question_ids del pack
+      final questions = await _packRepo.getPackQuestions(_packSeleccionado!.id);
+      final questionIds = questions.map((q) => int.tryParse(q.id) ?? 0).toList();
+
       final visitData = {
         'customer_id': _clienteSeleccionado!['id'],
         'customer_name': _clienteSeleccionado!['name'],
@@ -96,6 +103,10 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
         'priority': _prioridad,
         'status': 'PENDING',
         'sincronizado': 0,
+        'pack_id': _packSeleccionado!.id,
+        'pack_name': _packSeleccionado!.name,
+        'pack_type': _packSeleccionado!.packType,
+        'question_ids': jsonEncode(questionIds),
       };
 
       // Buscar si el cliente ya tiene una visita programada (pendiente) en local
@@ -127,31 +138,13 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
         print('🆕 Creada visita manual ad-hoc con ID: $visitaId');
       }
 
-      // Guardar preguntas asociadas
-      final preguntas = await _db.getPreguntasByEncuestaId(_encuestaSeleccionada!['id']);
-      final questionsJson = preguntas.map((p) => {
-        'id': p['server_id'] ?? p['id'],
-        'description': p['descripcion'],
-        'question_type': p['tipo'],
-        'is_required': p['es_requerida'] == 1,
-        'response_options': p['opciones'] != null
-            ? PreguntaOption.parseOptions(p['opciones']).map((o) => o.toJson()).toList()
-            : null,
-        'sort_order': p['orden'],
-        'order_index': p['orden'],
-      }).toList();
-
-      await _db.guardarEncuestaPreguntas(
-        id: 'encv_${now.microsecondsSinceEpoch}',
-        visitId: visitaId,
-        questionsJson: jsonEncode(questionsJson),
-      );
+      print('✅ Visita guardada con pack: ${_packSeleccionado!.name} y ${questionIds.length} preguntas');
 
       if (mounted) {
         setState(() => _isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Visita creada exitosamente'),
+          SnackBar(
+            content: Text('✅ Visita creada con pack "${_packSeleccionado!.name}"'),
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
           ),
@@ -180,7 +173,7 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: Text(_paso == 1 ? 'Seleccionar Cliente' : _paso == 2 ? 'Seleccionar Encuesta' : 'Datos de Visita'),
+        title: Text(_paso == 1 ? 'Seleccionar Cliente' : _paso == 2 ? 'Seleccionar Pack de Preguntas' : 'Datos de Visita'),
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -199,7 +192,7 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
           : _paso == 1
               ? _buildPasoCliente()
               : _paso == 2
-                  ? _buildPasoEncuesta()
+                  ? _buildPasoPack()
                   : _buildPasoNotas(),
     );
   }
@@ -322,7 +315,7 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
   // ═══════════════════════════════════════
   // PASO 2: SELECCIONAR ENCUESTA
   // ═══════════════════════════════════════
-  Widget _buildPasoEncuesta() {
+  Widget _buildPasoPack() {
     return Column(
       children: [
         _buildStepper(2),
@@ -381,36 +374,36 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
               ],
             ),
           ),
-        // Encuestas
+        // Packs de preguntas
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
-              Text('${_encuestas.length} encuesta${_encuestas.length != 1 ? 's' : ''} disponible${_encuestas.length != 1 ? 's' : ''}',
+              Text('${_packs.length} pack${_packs.length != 1 ? 's' : ''} disponible${_packs.length != 1 ? 's' : ''}',
                   style: TextStyle(fontSize: 13, color: Colors.grey[600])),
             ],
           ),
         ),
         const SizedBox(height: 8),
         Expanded(
-          child: _encuestas.isEmpty
+          child: _packs.isEmpty
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.quiz_outlined, size: 60, color: Colors.grey[300]),
+                      Icon(Icons.assignment_outlined, size: 60, color: Colors.grey[300]),
                       const SizedBox(height: 12),
-                      const Text('No hay encuestas disponibles', style: TextStyle(color: Colors.grey)),
-                      const Text('El administrador debe crear plantillas', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      const Text('No hay packs disponibles', style: TextStyle(color: Colors.grey)),
+                      const Text('Descargue datos primero en la pantalla principal', style: TextStyle(fontSize: 12, color: Colors.grey)),
                     ],
                   ),
                 )
               : ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: _encuestas.length,
+                  itemCount: _packs.length,
                   itemBuilder: (context, index) {
-                    final encuesta = _encuestas[index];
-                    final isSelected = _encuestaSeleccionada?['id'] == encuesta['id'];
+                    final pack = _packs[index];
+                    final isSelected = _packSeleccionado?.id == pack.id;
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
                       shape: RoundedRectangleBorder(
@@ -420,25 +413,25 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
                       child: ListTile(
                         onTap: () {
                           setState(() {
-                            _encuestaSeleccionada = encuesta;
+                            _packSeleccionado = pack;
                             _paso = 3;
                           });
                         },
                         leading: CircleAvatar(
-                          backgroundColor: isSelected ? AppColors.primaryColor : Colors.teal.withValues(alpha: 0.1),
+                          backgroundColor: isSelected ? AppColors.primaryColor : Colors.purple.withValues(alpha: 0.1),
                           child: Icon(
-                            Icons.quiz,
-                            color: isSelected ? Colors.white : Colors.teal,
+                            Icons.assignment,
+                            color: isSelected ? Colors.white : Colors.purple,
                             size: 20,
                           ),
                         ),
-                        title: Text(encuesta['titulo'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: encuesta['descripcion']?.toString().isNotEmpty == true
-                            ? Text(encuesta['descripcion'], maxLines: 2, overflow: TextOverflow.ellipsis)
+                        title: Text(pack.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: pack.description?.isNotEmpty == true
+                            ? Text(pack.description!, maxLines: 2, overflow: TextOverflow.ellipsis)
                             : null,
                         trailing: isSelected
                             ? const Icon(Icons.check_circle, color: AppColors.primaryColor)
-                            : const Icon(Icons.chevron_right, color: Colors.grey),
+                            : Text('${pack.questionIds.length} preguntas', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
                       ),
                     );
                   },
@@ -478,7 +471,9 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
                   _clienteSeleccionado?['name'] ?? '',
                   isProspect: _clienteSeleccionado?['is_prospect'] == 1,
                 ),
-                _buildResumenRow('Encuesta', _encuestaSeleccionada?['titulo'] ?? ''),
+                _buildResumenRow('Pack de Preguntas', _packSeleccionado?.name ?? ''),
+                if (_packSeleccionado != null)
+                  _buildResumenRow('Preguntas', '${_packSeleccionado!.questionIds.length} preguntas'),
               ],
             ),
           ),
@@ -546,7 +541,7 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
         children: [
           _buildStepDot(1, 'Cliente', currentStep),
           _buildStepLine(currentStep > 1),
-          _buildStepDot(2, 'Encuesta', currentStep),
+          _buildStepDot(2, 'Pack', currentStep),
           _buildStepLine(currentStep > 2),
           _buildStepDot(3, 'Guardar', currentStep),
         ],

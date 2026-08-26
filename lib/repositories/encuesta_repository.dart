@@ -33,6 +33,109 @@ class EncuestaRepository {
     }
   }
 
+  /// Obtiene las preguntas específicas asignadas a una visita (por question_ids)
+  /// Respeta el orden del array question_ids
+  Future<EncuestaModel?> getEncuestaVisita(String visitaId) async {
+    try {
+      final db = await _db.database;
+
+      // Obtener visita con sus question_ids
+      final visitaResult = await db.query(
+        'visitas',
+        where: 'id = ?',
+        whereArgs: [visitaId],
+        limit: 1,
+      );
+
+      if (visitaResult.isEmpty) {
+        print('⚠️ Visita $visitaId no encontrada');
+        return null;
+      }
+
+      final visita = visitaResult.first;
+      final questionIdsJson = visita['question_ids']?.toString() ?? '[]';
+      final packName = visita['pack_name']?.toString() ?? 'Encuesta personalizada';
+      final customerId = visita['customer_id']?.toString() ?? '';
+
+      // Parsear question_ids
+      List<int> questionIds;
+      try {
+        final parsed = jsonDecode(questionIdsJson) as List?;
+        questionIds = (parsed ?? []).map((e) => int.parse(e.toString())).toList();
+      } catch (e) {
+        print('⚠️ Error parseando question_ids para visita $visitaId: $e');
+        return null;
+      }
+
+      // Si no hay preguntas asignadas, retornar modelo vacío
+      if (questionIds.isEmpty) {
+        return EncuestaModel(
+          id: visitaId,
+          salespersonId: 'vendedor',
+          customerId: customerId,
+          status: 'PENDING',
+          questions: [],
+          answers: [],
+          packName: packName,
+        );
+      }
+
+      // Obtener todas las preguntas del catálogo
+      final todasPreguntasData = await db.query('preguntas');
+
+      // Mapear por ID para búsqueda rápida
+      final preguntasMap = <int, Map<String, dynamic>>{};
+      for (final p in todasPreguntasData) {
+        final id = p['id'];
+        if (id != null) {
+          final idInt = int.tryParse(id.toString());
+          if (idInt != null) {
+            preguntasMap[idInt] = p;
+          }
+        }
+      }
+
+      // Construir lista de preguntas en el orden de question_ids
+      final preguntas = <PreguntaModel>[];
+      for (final qId in questionIds) {
+        final p = preguntasMap[qId];
+        if (p != null) {
+          final opcionesStr = p['opciones']?.toString() ?? '';
+          final responseOptions = opcionesStr.isNotEmpty
+              ? PreguntaOption.parseOptions(opcionesStr)
+              : null;
+          final effectiveId = p['server_id']?.toString().isNotEmpty == true
+              ? p['server_id'].toString()
+              : (p['id']?.toString() ?? '');
+
+          preguntas.add(PreguntaModel(
+            id: effectiveId,
+            code: effectiveId,
+            description: p['descripcion']?.toString() ?? '',
+            questionType: p['tipo']?.toString() ?? 'TEXT',
+            isRequired: p['es_requerida'] == 1,
+            responseOptions: responseOptions,
+            sortOrder: qId,
+            orderIndex: qId,
+          ));
+        }
+      }
+
+      return EncuestaModel(
+        id: visitaId,
+        salespersonId: 'vendedor',
+        customerId: customerId,
+        status: 'PENDING',
+        questions: preguntas,
+        answers: [],
+        packName: packName,
+      );
+    } catch (e) {
+      print('❌ Error obteniendo encuesta de visita: $e');
+      return null;
+    }
+  }
+
   /// Obtiene una encuesta (plantilla) por su ID para aplicarla a una visita
   Future<EncuestaModel?> getPlantillaEncuesta(String plantillaId, String visitaId) async {
     try {

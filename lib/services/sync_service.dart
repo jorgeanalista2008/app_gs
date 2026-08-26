@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:sqflite/sqflite.dart';
 import '../core/env.dart';
 import 'database_helper.dart';
 import 'connectivity_service.dart';
@@ -136,6 +137,7 @@ class SyncService {
     int clientesDescargados = 0;
     int visitasDescargadas = 0;
     int preguntasDescargadas = 0;
+    int packsDescargados = 0;
     int errores = 0;
 
     try {
@@ -146,6 +148,7 @@ class SyncService {
           'clientes': 0,
           'visitas': 0,
           'preguntas': 0,
+          'packs': 0,
           'errores': 1,
         };
       }
@@ -158,6 +161,7 @@ class SyncService {
           'clientes': 0,
           'visitas': 0,
           'preguntas': 0,
+          'packs': 0,
           'errores': 1,
         };
       }
@@ -287,6 +291,12 @@ class SyncService {
         preguntasDescargadas = preguntas.length;
         print('✅ $preguntasDescargadas preguntas guardadas localmente');
       }
+
+      // 4. Descargar packs de preguntas
+      print('📥 Descargando packs de preguntas desde el servidor...');
+      await _descargarPacks();
+      packsDescargados = await _contarPacksLocales();
+
     } catch (e) {
       errores++;
       print('❌ Error en descargarDatosFromServer: $e');
@@ -296,6 +306,7 @@ class SyncService {
       'clientes': clientesDescargados,
       'visitas': visitasDescargadas,
       'preguntas': preguntasDescargadas,
+      'packs': packsDescargados,
       'errores': errores,
     };
   }
@@ -779,6 +790,86 @@ class SyncService {
     } finally {
       _isSyncing = false;
       _syncingController.add(false);
+    }
+  }
+
+  /// Descargar packs de preguntas disponibles
+  Future<void> _descargarPacks() async {
+    try {
+      final packs = await GenericRepository.instance.getListOnline<Map<String, dynamic>>(
+        path: '/survey/packs',
+        nestedKey: 'data',
+        fromJson: (json) => json,
+      );
+
+      if (packs.isEmpty) {
+        print('⚠️ No se encontraron packs de preguntas');
+        return;
+      }
+
+      final db = await _db.database;
+      for (final pack in packs) {
+        final packId = pack['id']?.toString() ?? '';
+        final packName = pack['name']?.toString() ?? '';
+        final packType = pack['pack_type']?.toString() ?? '';
+        final description = pack['description']?.toString() ?? '';
+        final isActive = (pack['is_active'] == true || pack['is_active'] == 1) ? 1 : 0;
+        final createdAt = pack['created_at']?.toString() ?? DateTime.now().toIso8601String();
+        final updatedAt = pack['updated_at']?.toString() ?? DateTime.now().toIso8601String();
+
+        // Guardar pack
+        await db.insert(
+          'survey_packs',
+          {
+            'id': packId,
+            'name': packName,
+            'pack_type': packType,
+            'description': description,
+            'is_active': isActive,
+            'created_at': createdAt,
+            'updated_at': updatedAt,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+
+        // Guardar preguntas del pack si existen
+        final questionIds = pack['question_ids'] ?? pack['questions'] ?? [];
+        if (questionIds is List) {
+          for (int i = 0; i < questionIds.length; i++) {
+            final qId = questionIds[i];
+            final questionId = int.tryParse(qId.toString()) ?? 0;
+            if (questionId > 0) {
+              await db.insert(
+                'survey_pack_questions',
+                {
+                  'pack_id': packId,
+                  'question_id': questionId,
+                  'sort_order': i,
+                  'is_required': 1,
+                },
+                conflictAlgorithm: ConflictAlgorithm.ignore,
+              );
+            }
+          }
+        }
+      }
+
+      print('✅ ${packs.length} packs de preguntas guardados localmente');
+    } catch (e) {
+      print('❌ Error descargando packs: $e');
+    }
+  }
+
+  /// Contar packs locales
+  Future<int> _contarPacksLocales() async {
+    try {
+      final db = await _db.database;
+      final count = Sqflite.firstIntValue(
+        await db.rawQuery('SELECT COUNT(*) FROM survey_packs WHERE is_active = 1'),
+      ) ?? 0;
+      return count;
+    } catch (e) {
+      return 0;
     }
   }
 

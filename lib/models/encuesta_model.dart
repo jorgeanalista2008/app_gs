@@ -7,6 +7,7 @@ class EncuestaModel {
   final String status;
   final List<PreguntaModel> questions;
   final List<dynamic> answers;
+  final String? packName;
 
   EncuestaModel({
     required this.id,
@@ -15,6 +16,7 @@ class EncuestaModel {
     this.status = 'PENDING',
     required this.questions,
     this.answers = const [],
+    this.packName,
   });
 
   factory EncuestaModel.fromJson(Map<String, dynamic> json) {
@@ -27,6 +29,7 @@ class EncuestaModel {
           ? (json['questions'] as List).map((q) => PreguntaModel.fromJson(q)).toList()
           : [],
       answers: json['answers'] ?? [],
+      packName: json['pack_name']?.toString(),
     );
   }
 
@@ -37,5 +40,6 @@ class EncuestaModel {
     'status': status,
     'questions': questions.map((q) => q.toJson()).toList(),
     'answers': answers,
+    'pack_name': packName,
   };
 }
