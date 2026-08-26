@@ -9,6 +9,10 @@ import '../services/auth_service.dart';
 import '../services/connectivity_service.dart';
 import '../repositories/cliente_repository.dart';
 
+import 'dart:async';
+import '../services/sync_service.dart';
+import '../services/sync_queue_service.dart';
+
 class DashboardContent extends StatefulWidget {
   final String userName;
   final String userRole;
@@ -26,6 +30,10 @@ class DashboardContent extends StatefulWidget {
 class _DashboardContentState extends State<DashboardContent> {
   final DatabaseHelper _db = DatabaseHelper.instance;
   final AuthService _authService = AuthService.instance;
+
+  StreamSubscription<bool>? _syncServiceSub;
+  StreamSubscription<bool>? _syncQueueSub;
+  StreamSubscription<int>? _pendingCountSub;
 
   // Estadísticas
   int _totalUsuarios = 0;
@@ -50,10 +58,36 @@ class _DashboardContentState extends State<DashboardContent> {
   void initState() {
     super.initState();
     _loadData();
+
+    _syncServiceSub = SyncService.instance.syncingStream.listen((syncing) {
+      if (!syncing && mounted) {
+        _loadData(showSpinner: false);
+      }
+    });
+
+    _syncQueueSub = SyncQueueService.instance.syncingStream.listen((syncing) {
+      if (!syncing && mounted) {
+        _loadData(showSpinner: false);
+      }
+    });
+
+    _pendingCountSub = SyncQueueService.instance.pendingCountStream.listen((_) {
+      if (mounted) {
+        _loadData(showSpinner: false);
+      }
+    });
   }
 
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+  @override
+  void dispose() {
+    _syncServiceSub?.cancel();
+    _syncQueueSub?.cancel();
+    _pendingCountSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadData({bool showSpinner = true}) async {
+    if (showSpinner) setState(() => _isLoading = true);
 
     try {
       final db = await _db.database;
@@ -204,10 +238,13 @@ class _DashboardContentState extends State<DashboardContent> {
   // DASHBOARD ADMIN
   // ═══════════════════════════════════════
   Widget _buildAdminDashboard() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return RefreshIndicator(
+      onRefresh: () => _loadData(showSpinner: false),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Saludo
           Text(
@@ -353,7 +390,8 @@ class _DashboardContentState extends State<DashboardContent> {
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 
   // ═══════════════════════════════════════

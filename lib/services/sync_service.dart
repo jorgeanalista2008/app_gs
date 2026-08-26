@@ -9,6 +9,7 @@ import 'auth_service.dart';
 import 'sync_queue_service.dart';
 import 'image_upload_service.dart';
 import '../repositories/generic_repository.dart';
+import '../repositories/cliente_repository.dart';
 
 class SyncService {
   static final SyncService instance = SyncService._();
@@ -196,6 +197,14 @@ class SyncService {
       }
 
       if (username != null && pass != null) {
+        // 1.5. Descargar prospectos del vendedor desde el servidor
+        print('📥 Descargando prospectos desde el servidor...');
+        final prospectosDescargados = await ClienteRepository().sincronizarProspectos(
+          email: username,
+          password: pass,
+        );
+        print('✅ $prospectosDescargados prospectos nuevos guardados/actualizados localmente');
+
         final res = await GenericRepository.instance.executeRequest(
           method: 'POST',
           endpoint: '/salesperson/auth/visits/list',
@@ -395,8 +404,46 @@ class SyncService {
           final respuestaRow = respuestas.first;
           final answersList = jsonDecode(respuestaRow['respuestas_json'] as String) as List;
 
+          // Resolver el customer_id real del servidor y verificar estado de sincronización del cliente
+          String rawCustomerId = visitRow['customer_id']?.toString() ?? '';
+          String effectiveCustomerId = rawCustomerId;
+          bool prospectoPendiente = false;
+
+          final mappedId = await _db.getServerId('prospecto', rawCustomerId) ?? 
+                           await _db.getServerId('cliente', rawCustomerId);
+          if (mappedId != null && mappedId.isNotEmpty) {
+            effectiveCustomerId = mappedId;
+          } else {
+            final clienteRows = await db.rawQuery(
+              'SELECT id, server_id, code_client_profit, sincronizado FROM clientes WHERE id = ? OR server_id = ? OR code_client_profit = ?',
+              [rawCustomerId, rawCustomerId, rawCustomerId],
+            );
+            if (clienteRows.isNotEmpty) {
+              final c = clienteRows.first;
+              final syncVal = (c['sincronizado'] as int?) ?? 1;
+              if (c['server_id'] != null && c['server_id'].toString().isNotEmpty) {
+                effectiveCustomerId = c['server_id'].toString();
+              } else if (c['code_client_profit'] != null && c['code_client_profit'].toString().isNotEmpty) {
+                effectiveCustomerId = c['code_client_profit'].toString();
+              }
+
+              // Si fue creado localmente y aún no tiene server_id ni sincronizado == 1
+              if (syncVal == 0 && (c['server_id'] == null || c['server_id'].toString().isEmpty) && (c['code_client_profit'] == null || c['code_client_profit'].toString().isEmpty)) {
+                prospectoPendiente = true;
+              }
+            }
+          }
+
+          if (prospectoPendiente) {
+            print('⏳ [SyncService] El prospecto local $rawCustomerId aún no se ha subido a la API. Posponiendo envío de visita.');
+            continue;
+          }
+
           // 1. Crear el registro de visita en el backend
-          final scheduleId = int.tryParse(visitId) ?? (double.tryParse(visitId)?.toInt());
+          final rawScheduleId = int.tryParse(visitId) ?? (double.tryParse(visitId)?.toInt());
+          final isAdHocVisit = visitId.toString().startsWith('visita_') || (rawScheduleId != null && rawScheduleId > 2000000);
+          final realScheduleId = isAdHocVisit ? null : rawScheduleId;
+
           final visitDate = visitRow['visit_date_from']?.toString() ?? 
                             (respuestaRow['fecha_creacion']?.toString().substring(0, 10)) ?? 
                             DateTime.now().toIso8601String().substring(0, 10);
@@ -425,17 +472,20 @@ class SyncService {
           final visitBody = <String, dynamic>{
             'email': username,
             'password': pass,
-            'customer_id': visitRow['customer_id'],
+            'customer_id': effectiveCustomerId,
+            if (realScheduleId != null) 'visit_schedule_id': realScheduleId,
             'visit_date': visitDate,
-            if (scheduleId != null) 'visit_schedule_id': scheduleId,
-            'latitude': respuestaRow['lat'],
-            'longitude': respuestaRow['lng'],
-            'description': visitRow['notes'] ?? '',
+            'latitude': respuestaRow['lat'] ?? 0.0,
+            'longitude': respuestaRow['lng'] ?? 0.0,
+            'description': (visitRow['notes'] != null && visitRow['notes'].toString().trim().isNotEmpty)
+                ? visitRow['notes'].toString().trim()
+                : 'Visita realizada',
+            'extra_data': {},
             if (photo1Id != null) 'photo_1_id': photo1Id,
             if (photo2Id != null) 'photo_2_id': photo2Id,
           };
 
-          print('🔍 Sincronizando visita - ID local: $visitId, parsed scheduleId: $scheduleId');
+          print('🔍 Sincronizando visita - ID local: $visitId, parsed scheduleId: $realScheduleId');
           print('📤 Creando visita en backend para cliente ${visitRow['customer_name']}...');
           final visitResponse = await GenericRepository.instance.postOnline<Map<String, dynamic>>(
             path: '/salesperson/auth/visits',
@@ -485,25 +535,25 @@ class SyncService {
             }
           }
 
-          // 3. Completar visita programada en backend si correspondía a un schedule (id numérico)
-          if (scheduleId != null) {
-            print('📤 Completando visita programada $scheduleId en backend via POST...');
-            final completeBody = <String, dynamic>{
-              'email': username,
-              'password': pass,
-              'status': 'COMPLETED',
-              'notes': visitRow['notes'] ?? '',
-              'visit_record_id': parsedVisitId,
-            };
+          // 3. Completar visita programada en backend si correspondía a un schedule real
+          if (realScheduleId != null) {
+            try {
+              print('📤 Completando visita programada $realScheduleId en backend via POST...');
+              final completeBody = <String, dynamic>{
+                'email': username,
+                'password': pass,
+                'status': 'COMPLETED',
+                'notes': visitRow['notes'] ?? '',
+                'visit_record_id': parsedVisitId,
+              };
 
-            final completeResponse = await GenericRepository.instance.postOnline<Map<String, dynamic>>(
-              path: '/salesperson/auth/schedules/$scheduleId/complete',
-              body: completeBody,
-              fromJson: (json) => json,
-            );
-
-            if (completeResponse == null) {
-              throw Exception('El servidor rechazó completar la agenda programada $scheduleId.');
+              await GenericRepository.instance.postOnline<Map<String, dynamic>>(
+                path: '/salesperson/auth/schedules/$realScheduleId/complete',
+                body: completeBody,
+                fromJson: (json) => json,
+              );
+            } catch (e) {
+              print('⚠️ Notificación de agenda programada $realScheduleId no requerida o ya completada: $e');
             }
           }
 
@@ -518,9 +568,9 @@ class SyncService {
         }
       }
 
-      // Limpiar sincronizadas de SQLite
+      // Preservar respuestas en SQLite para consulta en Detalle de Visita
       if (marcadas > 0) {
-        await _db.eliminarRespuestasSincronizadas();
+        // await _db.eliminarRespuestasSincronizadas();
         await _db.limpiarDatosAntiguos();
       }
 
@@ -712,7 +762,7 @@ class SyncService {
 
       // 1. Subir operaciones en cola (prospectos, respuestas, etc.)
       print('📤 [SyncService] Subiendo operaciones pendientes en la cola...');
-      await SyncQueueService.instance.drain();
+      await SyncQueueService.instance.drain(force: true);
 
       // 2. Subir visitas completadas y respuestas no encoladas
       print('📤 [SyncService] Subiendo visitas completadas...');

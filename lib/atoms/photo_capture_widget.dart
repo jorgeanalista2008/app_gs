@@ -63,6 +63,16 @@ class _PhotoCaptureWidgetState extends State<PhotoCaptureWidget> {
   }
 
   Future<void> _tomarFoto() async {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('La captura de imágenes está deshabilitada temporalmente.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+    return;
+    /* Deshabilitado temporalmente:
     try {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.camera,
@@ -109,9 +119,20 @@ class _PhotoCaptureWidgetState extends State<PhotoCaptureWidget> {
         );
       }
     }
+    */
   }
 
   Future<void> _seleccionarDeGaleria() async {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('La selección de imágenes desde la galería está deshabilitada temporalmente.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+    return;
+    /* Deshabilitado temporalmente:
     try {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.gallery,
@@ -152,6 +173,7 @@ class _PhotoCaptureWidgetState extends State<PhotoCaptureWidget> {
     } catch (e) {
       print('❌ Error al seleccionar foto: $e');
     }
+    */
   }
 
   Future<Position?> _capturarUbicacion() async {

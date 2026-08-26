@@ -1,11 +1,49 @@
 import 'package:sqflite/sqflite.dart';
 import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../core/env.dart';
 import '../models/encuesta_model.dart';
 import '../services/database_helper.dart';
 import '../models/pregunta_model.dart';
 
 class EncuestaRepository {
   final DatabaseHelper _db = DatabaseHelper.instance;
+
+  /// Obtiene detalle de visita con respuestas desde la API backend
+  Future<Map<String, dynamic>?> fetchVisitaConRespuestasFromApi({
+    required String visitId,
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final url = Uri.parse('${Env.apiBaseUrl}/salesperson/auth/visits/$visitId/with-answers');
+      final payload = {
+        'email': email,
+        'password': password,
+      };
+
+      print('📡 Consultando visita con respuestas en API: $url');
+      final response = await http.post(
+        url,
+        headers: {
+          'Accept': '*/*',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 20));
+
+      print('📊 Status respuestas API: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> decoded = jsonDecode(response.body);
+        return decoded;
+      }
+      return null;
+    } catch (e) {
+      print('❌ Error obteniendo visita con respuestas desde API: $e');
+      return null;
+    }
+  }
 
   /// Obtiene las preguntas de una visita desde SQLite
   Future<EncuestaModel?> getEncuesta(String visitaId) async {

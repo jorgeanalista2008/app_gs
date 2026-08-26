@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
+import 'sync_service.dart';
+
 class ConnectivityService {
   static final ConnectivityService instance = ConnectivityService._();
   ConnectivityService._();
@@ -32,6 +34,10 @@ class ConnectivityService {
       _controller.add(result);
       final conectado = result != ConnectivityResult.none;
       print(conectado ? '🌐 Conectado a internet' : '📴 Sin conexión a internet');
+      if (conectado) {
+        print('⚡ [ConnectivityService] Red detectada/recuperada → Ejecutando sincronización automática...');
+        SyncService.instance.ejecutarSincronizacionCompleta();
+      }
     });
   }
 

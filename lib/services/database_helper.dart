@@ -631,6 +631,7 @@ class DatabaseHelper {
         'clientes',
         {
           'id': id,
+          'server_id': cliente['server_id']?.toString() ?? cliente['id']?.toString(),
           'name': cliente['name'] ?? 'Sin nombre',
           'code_client_profit': cliente['code_client_profit'] ?? '',
           'tax_id': cliente['tax_id'] ?? '',
@@ -698,6 +699,11 @@ class DatabaseHelper {
       }
 
       final serverUpdatedAtIso = result.serverUpdatedAt?.toIso8601String();
+      final currentLocalStatus = localRow != null ? localRow['status']?.toString() : null;
+      final effectiveStatus = (currentLocalStatus == 'COMPLETED')
+          ? 'COMPLETED'
+          : (visita['status']?.toString() ?? 'PENDING');
+
       await db.insert(
         'visitas',
         {
@@ -712,9 +718,11 @@ class DatabaseHelper {
           'visit_date_to': visita['visit_date_to'],
           'notes': visita['notes'],
           'priority': visita['priority'] ?? 1,
-          'status': visita['status'] ?? 'PENDING',
-          'completed_at': visita['completed_at'],
-          'sincronizado': 1,
+          'status': effectiveStatus,
+          'completed_at': (effectiveStatus == 'COMPLETED')
+              ? (localRow?['completed_at'] ?? visita['completed_at'] ?? DateTime.now().toIso8601String())
+              : visita['completed_at'],
+          'sincronizado': (currentLocalStatus == 'COMPLETED' && localRow?['sincronizado'] == 1) ? 1 : 1,
           'fecha_sync': nowIso,
           'updated_at': serverUpdatedAtIso ?? nowIso,
           'server_updated_at': serverUpdatedAtIso,

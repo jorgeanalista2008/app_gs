@@ -124,7 +124,8 @@ class AppDrawer extends StatelessWidget {
                 );
               },
             ),  
-            // En la sección del vendedor:
+            // En la sección del vendedor (Deshabilitado por ahora):
+            /*
             ListTile(
               leading: const Icon(Icons.map, color: Colors.teal),
               title: const Text('Mapa de Clientes'),
@@ -136,6 +137,7 @@ class AppDrawer extends StatelessWidget {
                 );
               },
             ),
+            */
             ListTile(
               leading: const Icon(Icons.add_task, color: Colors.deepPurple),
               title: const Text('Crear Pregunta'),
@@ -152,6 +154,8 @@ class AppDrawer extends StatelessWidget {
               },
             ),
             const Divider(),
+            // Oculto temporalmente:
+            /*
             ListTile(
               leading: const Icon(Icons.person_outline, color: AppColors.primaryColor),
               title: const Text('Mi Perfil'),
@@ -163,6 +167,7 @@ class AppDrawer extends StatelessWidget {
                 ).then((_) => onProfileUpdated?.call());
               },
             ),
+            */
           ],
 
           const Divider(),

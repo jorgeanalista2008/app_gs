@@ -63,6 +63,12 @@ class ClienteRepository {
         where: 'id = ?',
         whereArgs: [localId],
       );
+      await db.update(
+        'visitas',
+        {'customer_id': serverId},
+        where: 'customer_id = ?',
+        whereArgs: [localId],
+      );
       await DatabaseHelper.instance.registrarIdMapping(
         entityType: entityType,
         localId: localId,
@@ -420,13 +426,11 @@ class ClienteRepository {
       final payload = {
         'email': email,
         'password': password,
-        'page': 1,
-        'limit': 200,
       };
       print('📡 === DETALLE DE ENVÍO HTTP (DEBUG) ===');
       print('🔄 Método: POST');
       print('🌐 URL: $url');
-      print('🔑 Headers: {"Content-Type": "application/json"}');
+      print('🔑 Headers: {"Accept": "*/*", "Content-Type": "application/json"}');
       try {
         const encoder = JsonEncoder.withIndent('  ');
         final prettyJson = encoder.convert(payload);
@@ -438,7 +442,10 @@ class ClienteRepository {
 
       final response = await http.post(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Accept': '*/*',
+          'Content-Type': 'application/json',
+        },
         body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 30));
 

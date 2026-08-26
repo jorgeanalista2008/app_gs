@@ -228,16 +228,23 @@ class _NuevoProspectoPageState extends State<NuevoProspectoPage> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
+                isExpanded: true,
                 initialValue: _selectedZoneCode,
                 decoration: const InputDecoration(
                   labelText: 'Zona / Estado',
                   prefixIcon: Icon(Icons.map),
                 ),
-                hint: const Text('Selecciona la zona del candidato'),
+                hint: const Text(
+                  'Selecciona la zona del candidato',
+                  overflow: TextOverflow.ellipsis,
+                ),
                 items: _zonas.map((zona) {
                   return DropdownMenuItem<String>(
                     value: zona['profit_code'],
-                    child: Text(zona['description']!),
+                    child: Text(
+                      zona['description']!,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   );
                 }).toList(),
                 onChanged: (value) {
@@ -251,18 +258,28 @@ class _NuevoProspectoPageState extends State<NuevoProspectoPage> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
+                isExpanded: true,
                 initialValue: _selectedCity,
                 decoration: const InputDecoration(
                   labelText: 'Ciudad',
                   prefixIcon: Icon(Icons.location_city),
                 ),
-                hint: const Text('Selecciona la ciudad del candidato'),
-                disabledHint: const Text('Selecciona una zona/estado primero'),
+                hint: const Text(
+                  'Selecciona la ciudad del candidato',
+                  overflow: TextOverflow.ellipsis,
+                ),
+                disabledHint: const Text(
+                  'Selecciona una zona/estado primero',
+                  overflow: TextOverflow.ellipsis,
+                ),
                 items: _selectedZoneCode != null && _ciudadesPorZona.containsKey(_selectedZoneCode)
                     ? _ciudadesPorZona[_selectedZoneCode]!.map((ciudad) {
                         return DropdownMenuItem<String>(
                           value: ciudad,
-                          child: Text(ciudad),
+                          child: Text(
+                            ciudad,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         );
                       }).toList()
                     : null,
@@ -315,7 +332,9 @@ class _NuevoProspectoPageState extends State<NuevoProspectoPage> {
                 icon: Icons.notes,
               ),
               const SizedBox(height: 16),
-              _ubicacionCard(),
+               _ubicacionCard(),
+              // Oculto temporalmente para versión futura:
+              /*
               const SizedBox(height: 16),
               const Text(
                 'Evidencias fotográficas (opcional)',
@@ -343,6 +362,7 @@ class _NuevoProspectoPageState extends State<NuevoProspectoPage> {
                   ),
                 ],
               ),
+              */
               const SizedBox(height: 24),
               AppButton(
                 text: _saving ? 'Guardando…' : 'Guardar Prospecto',
