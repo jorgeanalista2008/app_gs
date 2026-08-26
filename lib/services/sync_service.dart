@@ -887,8 +887,8 @@ class SyncService {
         if (questionIds is List) {
           for (int i = 0; i < questionIds.length; i++) {
             final qId = questionIds[i];
-            final questionId = int.tryParse(qId.toString()) ?? 0;
-            if (questionId > 0) {
+            final questionId = int.tryParse(qId.toString());
+            if (questionId != null) {
               await db.insert(
                 'survey_pack_questions',
                 {

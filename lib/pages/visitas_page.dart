@@ -4,6 +4,8 @@ import '../core/app_colors.dart';
 import '../models/visita_model.dart';
 import '../repositories/visita_repository.dart';
 import '../repositories/generic_repository.dart';
+import '../repositories/encuesta_repository.dart';
+import '../repositories/survey_pack_repository.dart';
 import '../atoms/app_button.dart';
 import '../atoms/app_text_field.dart';
 import 'encuesta_page.dart';
@@ -26,6 +28,8 @@ class VisitasPage extends StatefulWidget {
 
 class _VisitasPageState extends State<VisitasPage> with SingleTickerProviderStateMixin {
   final VisitaRepository _visitaRepo = VisitaRepository();
+  final EncuestaRepository _encuestaRepo = EncuestaRepository();
+  final SurveyPackRepository _packRepo = SurveyPackRepository();
   final DatabaseHelper _db = DatabaseHelper.instance;
   final AuthService _authService = AuthService.instance;
   final TextEditingController _searchController = TextEditingController();
@@ -145,11 +149,35 @@ class _VisitasPageState extends State<VisitasPage> with SingleTickerProviderStat
       return;
     }
 
-    final plantillas = await DatabaseHelper.instance.getPlantillasEncuestas();
-
+    // Prioridad: si la visita ya trae un pack asignado (agendada por el
+    // admin con un tipo de encuesta — nuevo/existente/activación — o elegido
+    // al crearla en "Nueva Visita"), responder directo. Antes esto se
+    // ignoraba por completo y toda visita pendiente caía en el mismo picker
+    // genérico sin importar el pack real.
+    final encuestaAsignada = await _encuestaRepo.getEncuestaVisita(visita.id);
     if (!mounted) return;
 
-    if (plantillas.isEmpty) {
+    if (encuestaAsignada != null && encuestaAsignada.questions.isNotEmpty) {
+      final resultado = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => EncuestaPage(
+            visita: visita,
+            plantillaId: '',
+            plantillaTitulo: encuestaAsignada.packName ?? 'Encuesta de visita',
+          ),
+        ),
+      );
+      if (resultado == true) _loadVisitas();
+      return;
+    }
+
+    // Sin pack asignado: dejar elegir uno real (con su tipo) en vez de la
+    // plantilla plana genérica.
+    final packs = await _packRepo.getAvailablePacks();
+    if (!mounted) return;
+
+    if (packs.isEmpty) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -162,7 +190,7 @@ class _VisitasPageState extends State<VisitasPage> with SingleTickerProviderStat
             ],
           ),
           content: const Text(
-            'El administrador no ha configurado ninguna encuesta en el sistema.\n\nPor favor, contacte al administrador para crear una encuesta y sus preguntas desde el panel de administración.',
+            'El administrador no ha configurado ningún pack de encuesta en el sistema.\n\nPor favor, contacte al administrador para crear un pack y sus preguntas desde el panel de administración.',
           ),
           actions: [
             TextButton(
@@ -188,9 +216,9 @@ class _VisitasPageState extends State<VisitasPage> with SingleTickerProviderStat
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'Seleccionar Encuesta',
-                style: const TextStyle(
+              const Text(
+                'Seleccionar Pack de Encuesta',
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: AppColors.textPrimary,
@@ -199,7 +227,7 @@ class _VisitasPageState extends State<VisitasPage> with SingleTickerProviderStat
               ),
               const SizedBox(height: 8),
               Text(
-                'Selecciona la encuesta a aplicar para ${visita.customerName}',
+                'Selecciona el pack a aplicar para ${visita.customerName}',
                 style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                 textAlign: TextAlign.center,
               ),
@@ -207,12 +235,9 @@ class _VisitasPageState extends State<VisitasPage> with SingleTickerProviderStat
               Flexible(
                 child: ListView.builder(
                   shrinkWrap: true,
-                  itemCount: plantillas.length,
+                  itemCount: packs.length,
                   itemBuilder: (context, index) {
-                    final p = plantillas[index];
-                    final id = p['id'] as String;
-                    final titulo = p['titulo'] ?? 'Encuesta sin título';
-                    final desc = p['descripcion'] ?? '';
+                    final pack = packs[index];
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 10),
@@ -223,32 +248,56 @@ class _VisitasPageState extends State<VisitasPage> with SingleTickerProviderStat
                       ),
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: AppColors.primaryColor.withValues(alpha: 0.1),
-                          child: const Icon(Icons.assignment_outlined, color: AppColors.primaryColor),
+                          backgroundColor: pack.typeColor.withValues(alpha: 0.12),
+                          child: Icon(Icons.assignment_outlined, color: pack.typeColor),
                         ),
                         title: Text(
-                          titulo,
+                          pack.name,
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
                         ),
-                        subtitle: desc.isNotEmpty
-                            ? Text(
-                                desc,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                              )
-                            : null,
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: pack.typeColor.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  pack.typeLabel,
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: pack.typeColor),
+                                ),
+                              ),
+                              Text(
+                                '${pack.questionIds.length} pregunta${pack.questionIds.length == 1 ? '' : 's'}',
+                                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
                         trailing: const Icon(Icons.chevron_right, size: 20, color: AppColors.primaryColor),
                         onTap: () async {
                           Navigator.pop(context);
+
+                          await _packRepo.assignPackToVisit(
+                            visitId: visita.id,
+                            packId: pack.id,
+                            packName: pack.name,
+                          );
+
+                          if (!mounted) return;
 
                           final resultado = await Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (context) => EncuestaPage(
                                 visita: visita,
-                                plantillaId: id,
-                                plantillaTitulo: titulo,
+                                plantillaId: '',
+                                plantillaTitulo: pack.name,
                               ),
                             ),
                           );

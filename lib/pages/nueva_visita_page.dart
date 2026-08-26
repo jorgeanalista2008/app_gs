@@ -418,17 +418,41 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
                           });
                         },
                         leading: CircleAvatar(
-                          backgroundColor: isSelected ? AppColors.primaryColor : Colors.purple.withValues(alpha: 0.1),
+                          backgroundColor: isSelected ? AppColors.primaryColor : pack.typeColor.withValues(alpha: 0.12),
                           child: Icon(
                             Icons.assignment,
-                            color: isSelected ? Colors.white : Colors.purple,
+                            color: isSelected ? Colors.white : pack.typeColor,
                             size: 20,
                           ),
                         ),
                         title: Text(pack.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: pack.description?.isNotEmpty == true
-                            ? Text(pack.description!, maxLines: 2, overflow: TextOverflow.ellipsis)
-                            : null,
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: pack.typeColor.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  pack.typeLabel,
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: pack.typeColor),
+                                ),
+                              ),
+                              if (pack.description?.isNotEmpty == true)
+                                Text(
+                                  pack.description!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                ),
+                            ],
+                          ),
+                        ),
                         trailing: isSelected
                             ? const Icon(Icons.check_circle, color: AppColors.primaryColor)
                             : Text('${pack.questionIds.length} preguntas', style: TextStyle(color: Colors.grey[600], fontSize: 12)),

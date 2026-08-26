@@ -57,20 +57,59 @@ class Customer360ProfitSummary {
   final List<dynamic> recentPurchases;
   final List<dynamic> topProducts;
   final double last30DaysVolume;
+  final double currentYearUsd;
+  final double previousYearUsd;
+  final int totalInvoices;
+  final DateTime? lastPurchaseDate;
+  final int? daysSinceLastPurchase;
+  final int? avgDaysBetweenPurchases;
+  final double creditLimitUsd;
+  final double pendingBalanceUsd;
+  final double availableCreditUsd;
+  final bool isOverCredit;
 
   Customer360ProfitSummary({
     this.totalPurchasesUsd = 0,
     this.recentPurchases = const [],
     this.topProducts = const [],
     this.last30DaysVolume = 0,
+    this.currentYearUsd = 0,
+    this.previousYearUsd = 0,
+    this.totalInvoices = 0,
+    this.lastPurchaseDate,
+    this.daysSinceLastPurchase,
+    this.avgDaysBetweenPurchases,
+    this.creditLimitUsd = 0,
+    this.pendingBalanceUsd = 0,
+    this.availableCreditUsd = 0,
+    this.isOverCredit = false,
   });
 
   factory Customer360ProfitSummary.fromJson(Map<String, dynamic> json) {
+    final deuda = json['deuda'] as Map<String, dynamic>?;
     return Customer360ProfitSummary(
       totalPurchasesUsd: _parseDouble(json['total_purchases_usd']),
       recentPurchases: json['recent_purchases'] ?? [],
       topProducts: json['top_products'] ?? [],
       last30DaysVolume: _parseDouble(json['last_30_days_volume']),
+      currentYearUsd: _parseDouble(json['anio_actual_usd']),
+      previousYearUsd: _parseDouble(json['anio_anterior_usd']),
+      totalInvoices: json['total_facturas'] is int
+          ? json['total_facturas']
+          : int.tryParse(json['total_facturas']?.toString() ?? '0') ?? 0,
+      lastPurchaseDate: json['ultima_compra'] != null
+          ? DateTime.tryParse(json['ultima_compra'].toString())
+          : null,
+      daysSinceLastPurchase: json['dias_desde_ultima_compra'] is int
+          ? json['dias_desde_ultima_compra']
+          : int.tryParse(json['dias_desde_ultima_compra']?.toString() ?? ''),
+      avgDaysBetweenPurchases: json['promedio_dias_entre_compras'] is int
+          ? json['promedio_dias_entre_compras']
+          : int.tryParse(json['promedio_dias_entre_compras']?.toString() ?? ''),
+      creditLimitUsd: _parseDouble(deuda?['credito_usd']),
+      pendingBalanceUsd: _parseDouble(deuda?['saldo_pendiente_usd']),
+      availableCreditUsd: _parseDouble(deuda?['disponible_usd']),
+      isOverCredit: deuda?['sobregirado'] == true,
     );
   }
 
@@ -79,6 +118,18 @@ class Customer360ProfitSummary {
     'recent_purchases': recentPurchases,
     'top_products': topProducts,
     'last_30_days_volume': last30DaysVolume,
+    'anio_actual_usd': currentYearUsd,
+    'anio_anterior_usd': previousYearUsd,
+    'total_facturas': totalInvoices,
+    'ultima_compra': lastPurchaseDate?.toUtc().toIso8601String(),
+    'dias_desde_ultima_compra': daysSinceLastPurchase,
+    'promedio_dias_entre_compras': avgDaysBetweenPurchases,
+    'deuda': {
+      'credito_usd': creditLimitUsd,
+      'saldo_pendiente_usd': pendingBalanceUsd,
+      'disponible_usd': availableCreditUsd,
+      'sobregirado': isOverCredit,
+    },
   };
 
   static double _parseDouble(dynamic value) {

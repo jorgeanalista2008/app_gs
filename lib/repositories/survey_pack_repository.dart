@@ -1,6 +1,24 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import '../services/database_helper.dart';
 import '../models/pregunta_model.dart';
+
+/// Etiqueta y color por tipo de pack — mismo criterio que el admin web
+/// (PACK_TYPE_LABEL en survey-packs-api.ts) para que el vendedor vea la
+/// misma clasificación nuevo/existente/activación en ambos lados.
+const Map<String, String> packTypeLabels = {
+  'NEW_CUSTOMER': 'Cliente nuevo',
+  'EXISTING_CUSTOMER': 'Cliente existente',
+  'ACTIVATION': 'Cliente en activación',
+  'CUSTOM': 'Personalizada',
+};
+
+const Map<String, Color> packTypeColors = {
+  'NEW_CUSTOMER': Color(0xFF10B981), // emerald
+  'EXISTING_CUSTOMER': Color(0xFF0EA5E9), // sky
+  'ACTIVATION': Color(0xFFF59E0B), // amber
+  'CUSTOM': Color(0xFF8B5CF6), // violet
+};
 
 class SurveyPackModel {
   final String id;
@@ -18,6 +36,9 @@ class SurveyPackModel {
     this.isActive = true,
     this.questionIds = const [],
   });
+
+  String get typeLabel => packTypeLabels[packType] ?? packType;
+  Color get typeColor => packTypeColors[packType] ?? Colors.grey;
 
   factory SurveyPackModel.fromJson(Map<String, dynamic> json) {
     return SurveyPackModel(
@@ -62,8 +83,8 @@ class SurveyPackRepository {
         );
 
         final questionIds = packQuestionsData
-            .map((pq) => int.tryParse(pq['question_id'].toString()) ?? 0)
-            .where((id) => id > 0)
+            .map((pq) => int.tryParse(pq['question_id'].toString()))
+            .whereType<int>()
             .toList();
 
         packs.add(SurveyPackModel(

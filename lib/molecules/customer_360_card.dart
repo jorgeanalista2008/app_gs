@@ -271,6 +271,12 @@ class Customer360Card extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          _buildKpiGrid(profit),
+          if (profit.pendingBalanceUsd > 0 || profit.creditLimitUsd > 0) ...[
+            const SizedBox(height: 12),
+            _buildCreditRow(profit),
+          ],
           if (profit.recentPurchases.isNotEmpty) ...[
             const SizedBox(height: 12),
             Text(
@@ -308,6 +314,152 @@ class Customer360Card extends StatelessWidget {
               );
             }).toList(),
           ],
+        ],
+      ),
+    );
+  }
+
+  /// KPIs de apoyo para el vendedor en campo: cómo va el año contra el
+  /// anterior, cuánto hace que no compra y cada cuánto suele comprar.
+  Widget _buildKpiGrid(Customer360ProfitSummary profit) {
+    final delta = profit.previousYearUsd > 0
+        ? ((profit.currentYearUsd - profit.previousYearUsd) /
+                profit.previousYearUsd) *
+            100
+        : null;
+
+    // Se pasó del ritmo habitual de compra → señal de que hay que reactivarlo.
+    final overdue = profit.avgDaysBetweenPurchases != null &&
+        profit.daysSinceLastPurchase != null &&
+        profit.daysSinceLastPurchase! > profit.avgDaysBetweenPurchases! * 2;
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _kpiTile(
+                'Año actual',
+                '\$${profit.currentYearUsd.toStringAsFixed(0)}',
+                subtitle: delta != null
+                    ? '${delta >= 0 ? '▲' : '▼'} ${delta.abs().toStringAsFixed(0)}% vs año pasado'
+                    : null,
+                subtitleColor: delta == null
+                    ? null
+                    : (delta >= 0 ? Colors.green[700] : Colors.red[700]),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _kpiTile(
+                'Facturas',
+                '${profit.totalInvoices}',
+                subtitle: profit.avgDaysBetweenPurchases != null
+                    ? 'compra c/ ${profit.avgDaysBetweenPurchases}d'
+                    : null,
+              ),
+            ),
+          ],
+        ),
+        if (profit.daysSinceLastPurchase != null) ...[
+          const SizedBox(height: 8),
+          _kpiTile(
+            'Última compra',
+            'hace ${profit.daysSinceLastPurchase} días',
+            subtitle: overdue ? '⚠ Fuera de su ritmo habitual' : null,
+            subtitleColor: overdue ? Colors.orange[800] : null,
+            fullWidth: true,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildCreditRow(Customer360ProfitSummary profit) {
+    final over = profit.isOverCredit;
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: over ? Colors.red[50] : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: over ? Colors.red[300]! : Colors.grey[300]!,
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Saldo pendiente',
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+              Text(
+                '\$${profit.pendingBalanceUsd.toStringAsFixed(2)}',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: over ? Colors.red[700] : AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(over ? 'Sobregirado' : 'Crédito disponible',
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+              Text(
+                '\$${profit.availableCreditUsd.toStringAsFixed(2)}',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: over ? Colors.red[700] : Colors.green[700],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _kpiTile(
+    String label,
+    String value, {
+    String? subtitle,
+    Color? subtitleColor,
+    bool fullWidth = false,
+  }) {
+    return Container(
+      width: fullWidth ? double.infinity : null,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          if (subtitle != null)
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 10,
+                color: subtitleColor ?? Colors.grey[600],
+                fontWeight: subtitleColor != null ? FontWeight.w600 : null,
+              ),
+            ),
         ],
       ),
     );

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'services/database_helper.dart';
 import 'services/connectivity_service.dart';
 import 'services/sync_queue_service.dart';
@@ -10,6 +11,7 @@ import 'services/background_sync_service.dart';
 import 'services/location_tracking_service.dart';
 import 'repositories/cliente_repository.dart';
 import 'repositories/pregunta_repository.dart';
+import 'repositories/asistencia_repository.dart';
 import 'pages/login_page.dart';
 import 'pages/biometric_login_page.dart';
 import 'pages/home_page.dart';
@@ -17,6 +19,10 @@ import 'core/app_colors.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Datos de locale para DateFormat('...', 'es') — sin esto cualquier
+  // pantalla que formatee fechas en español revienta con LocaleDataException.
+  await initializeDateFormatting('es');
 
   // Inicializar BD y crear usuario maestro
   final db = DatabaseHelper.instance;
@@ -28,6 +34,7 @@ void main() async {
   ClienteRepository.registerSyncHandlers();
   PreguntaRepository.registerSyncHandlers();
   LocationTrackingService.registerSyncHandlers();
+  AsistenciaRepository.registerSyncHandlers();
   // Arranca el tracker sin depender de sesión. Si no hay permisos aún,
   // el servicio lo detecta y no arranca; se re-intenta al login o cuando
   // el usuario habilite permisos desde ajustes del SO.

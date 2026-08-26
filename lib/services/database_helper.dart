@@ -21,7 +21,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 16,
+      version: 18,
       onCreate: (db, version) async {
         await _createTables(db);
       },
@@ -128,6 +128,16 @@ class DatabaseHelper {
               print('Column $col already exists in visitas: $e');
             }
           }
+        }
+        // v16→v17: algunos dispositivos llegaron a version 16 sin que
+        // _createSurveyPacksTables se hubiera ejecutado nunca (bug: faltaba
+        // en _createTables para instalaciones nuevas). CREATE TABLE IF NOT
+        // EXISTS hace esto seguro de re-correr aunque ya existieran.
+        if (oldVersion < 17) {
+          await _createSurveyPacksTables(db);
+        }
+        if (oldVersion < 18) {
+          await _createAttendanceTable(db);
         }
       },
     );
@@ -277,6 +287,34 @@ class DatabaseHelper {
     await _createSyncConflictsTable(db);
     await _createIdMappingTable(db);
     await _createUbicacionesTable(db);
+    await _createSurveyPacksTables(db);
+    await _createAttendanceTable(db);
+  }
+
+  /// Asistencia (entrada/salida de jornada). Offline-first: el vendedor
+  /// marca a las 8am sin señal y la cola de sync lo sube después, por eso
+  /// `recorded_at` es la hora del dispositivo, no la del servidor.
+  Future<void> _createAttendanceTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS asistencia (
+        id TEXT PRIMARY KEY,
+        user_id TEXT,
+        tipo TEXT NOT NULL,
+        recorded_at TEXT NOT NULL,
+        local_day TEXT NOT NULL,
+        lat REAL,
+        lng REAL,
+        sincronizado INTEGER NOT NULL DEFAULT 0,
+        server_id TEXT,
+        created_at TEXT NOT NULL
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_asistencia_dia ON asistencia(user_id, local_day)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_asistencia_pend ON asistencia(sincronizado, recorded_at)',
+    );
   }
 
   Future<void> _createUbicacionesTable(Database db) async {

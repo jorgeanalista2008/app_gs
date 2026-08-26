@@ -81,9 +81,17 @@ class _EncuestaPageState extends State<EncuestaPage> {
     setState(() => _isLoadingEncuesta = true);
 
     try {
-      // Cargar desde SQLite local usando la plantilla seleccionada
-      final encuesta = await _encuestaRepo.getPlantillaEncuesta(widget.plantillaId, widget.visita.id);
-      
+      // Prioridad: si la visita ya trae un pack asignado (agendada por el
+      // admin con un tipo de encuesta, o elegido al crearla) usar esas
+      // preguntas — nunca la plantilla genérica. Antes esto se ignoraba: toda
+      // visita pendiente caía en el mismo cuestionario plano sin importar
+      // nuevo/existente/activación.
+      var encuesta = await _encuestaRepo.getEncuestaVisita(widget.visita.id);
+
+      if (encuesta == null || encuesta.questions.isEmpty) {
+        encuesta = await _encuestaRepo.getPlantillaEncuesta(widget.plantillaId, widget.visita.id);
+      }
+
       if (mounted) {
         if (encuesta != null && encuesta.questions.isNotEmpty) {
           setState(() {

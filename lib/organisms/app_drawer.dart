@@ -8,6 +8,7 @@ import '../pages/visitas_page.dart';
 import '../pages/admin_panel_page.dart';
 import '../pages/mapa_clientes_page.dart';
 import '../pages/crear_pregunta_page.dart';
+import '../pages/asistencia_page.dart';
 
 class AppDrawer extends StatelessWidget {
   final String userName;
@@ -123,7 +124,19 @@ class AppDrawer extends StatelessWidget {
                   MaterialPageRoute(builder: (context) => const VisitasPage()),
                 );
               },
-            ),  
+            ),
+            ListTile(
+              leading: const Icon(Icons.schedule, color: AppColors.secondaryColor),
+              title: const Text('Mi Jornada'),
+              subtitle: const Text('Marcar entrada y salida'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AsistenciaPage()),
+                );
+              },
+            ),
             // En la sección del vendedor (Deshabilitado por ahora):
             /*
             ListTile(
