@@ -476,35 +476,6 @@ class _DashboardContentState extends State<DashboardContent> {
             ),
             const SizedBox(height: 20),
 
-            // ─── Tasas BCV (USD + EUR) ───
-            if (_tasaUsd != null || _tasaEur != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 20),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _tasaCard(
-                        titulo: 'Dólar BCV',
-                        moneda: 'USD',
-                        simbolo: '\$',
-                        rate: _tasaUsd,
-                        color: AppColors.primaryColor,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _tasaCard(
-                        titulo: 'Euro BCV',
-                        moneda: 'EUR',
-                        simbolo: '€',
-                        rate: _tasaEur,
-                        color: AppColors.secondaryColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
             // ─── Sección KPIs ───
             _buildSectionTitle(Icons.insights_rounded, 'Mi Cartera'),
             const SizedBox(height: 12),

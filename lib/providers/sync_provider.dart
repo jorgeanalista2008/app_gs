@@ -122,6 +122,18 @@ class SyncStateNotifier extends StateNotifier<SyncState> {
     await refresh();
   }
 
+  /// Descarta / elimina una operación fallida permanente.
+  Future<void> dismissFailed(int operationId) async {
+    await SyncQueueService.instance.dismissFailed(operationId);
+    await refresh();
+  }
+
+  /// Descarta todas las operaciones fallidas permanentes.
+  Future<void> dismissAllFailed() async {
+    await SyncQueueService.instance.dismissAllFailed();
+    await refresh();
+  }
+
   @override
   void dispose() {
     _pendingSub?.cancel();

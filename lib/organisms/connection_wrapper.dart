@@ -67,7 +67,7 @@ class _ConnectionWrapperState extends ConsumerState<ConnectionWrapper> {
             return Container(
               padding: const EdgeInsets.all(20),
               constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.75,
+                maxHeight: MediaQuery.of(context).size.height * 0.80,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -84,25 +84,66 @@ class _ConnectionWrapperState extends ConsumerState<ConnectionWrapper> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
-                    'Operaciones Fallidas',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Operaciones Fallidas',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      failedOpsAsync.maybeWhen(
+                        data: (ops) => ops.isNotEmpty
+                            ? TextButton.icon(
+                                onPressed: () async {
+                                  await ref
+                                      .read(syncStateProvider.notifier)
+                                      .dismissAllFailed();
+                                  if (context.mounted) {
+                                    Navigator.pop(context);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Todas las operaciones fallidas fueron descartadas'),
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                  }
+                                },
+                                icon: const Icon(Icons.delete_sweep_rounded, size: 18, color: Colors.red),
+                                label: const Text(
+                                  'Descartar todas',
+                                  style: TextStyle(fontSize: 12, color: Colors.red),
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                        orElse: () => const SizedBox.shrink(),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   const Text(
-                    'Las siguientes operaciones fallaron permanentemente en el servidor. Puedes revisar el error e intentar subirlas de nuevo.',
-                    style: TextStyle(fontSize: 13, color: Colors.grey),
+                    'Las siguientes operaciones no pudieron completarse en el servidor. Puedes reintentar o descartarlas para limpiar la alerta.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   Expanded(
                     child: failedOpsAsync.when(
                       data: (ops) {
                         if (ops.isEmpty) {
                           return const Center(
-                            child: Text('No hay operaciones fallidas'),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.check_circle_outline_rounded, size: 48, color: Colors.green),
+                                SizedBox(height: 12),
+                                Text(
+                                  'No hay operaciones fallidas',
+                                  style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey),
+                                ),
+                              ],
+                            ),
                           );
                         }
                         return ListView.builder(
@@ -118,13 +159,19 @@ class _ConnectionWrapperState extends ConsumerState<ConnectionWrapper> {
                             String entityName = 'Operación';
                             try {
                               final payload = jsonDecode(payloadJson);
-                              if (payload is Map && payload.containsKey('name')) {
-                                entityName = payload['name']?.toString() ?? 'Operación';
+                              if (payload is Map) {
+                                if (payload.containsKey('name')) {
+                                  entityName = payload['name']?.toString() ?? 'Operación';
+                                } else if (payload.containsKey('type')) {
+                                  entityName = 'Jornada (${payload['type']})';
+                                }
                               }
                             } catch (_) {}
 
                             return Card(
                               margin: const EdgeInsets.only(bottom: 12),
+                              elevation: 1,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               child: Padding(
                                 padding: const EdgeInsets.all(12),
                                 child: Column(
@@ -141,21 +188,44 @@ class _ConnectionWrapperState extends ConsumerState<ConnectionWrapper> {
                                             color: AppColors.primaryColor,
                                           ),
                                         ),
-                                        IconButton(
-                                          icon: const Icon(Icons.refresh, color: Colors.green),
-                                          onPressed: () async {
-                                            await ref
-                                                .read(syncStateProvider.notifier)
-                                                .retryFailed(id);
-                                            if (context.mounted) {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                const SnackBar(
-                                                  content: Text('Reintentando operación...'),
-                                                  behavior: SnackBarBehavior.floating,
-                                                ),
-                                              );
-                                            }
-                                          },
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(Icons.refresh_rounded, color: Colors.green, size: 22),
+                                              tooltip: 'Reintentar',
+                                              onPressed: () async {
+                                                await ref
+                                                    .read(syncStateProvider.notifier)
+                                                    .retryFailed(id);
+                                                if (context.mounted) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    const SnackBar(
+                                                      content: Text('Reintentando operación...'),
+                                                      behavior: SnackBarBehavior.floating,
+                                                    ),
+                                                  );
+                                                }
+                                              },
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 22),
+                                              tooltip: 'Descartar',
+                                              onPressed: () async {
+                                                await ref
+                                                    .read(syncStateProvider.notifier)
+                                                    .dismissFailed(id);
+                                                if (context.mounted) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    const SnackBar(
+                                                      content: Text('Operación descartada'),
+                                                      behavior: SnackBarBehavior.floating,
+                                                    ),
+                                                  );
+                                                }
+                                              },
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
@@ -167,11 +237,19 @@ class _ConnectionWrapperState extends ConsumerState<ConnectionWrapper> {
                                       ),
                                     ),
                                     const SizedBox(height: 6),
-                                    Text(
-                                      'Error: $lastError',
-                                      style: const TextStyle(
-                                        color: Colors.red,
-                                        fontSize: 11,
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.shade50,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        'Error: $lastError',
+                                        style: TextStyle(
+                                          color: Colors.red.shade900,
+                                          fontSize: 11,
+                                          height: 1.3,
+                                        ),
                                       ),
                                     ),
                                   ],

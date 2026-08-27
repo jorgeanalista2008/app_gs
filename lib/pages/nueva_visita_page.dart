@@ -7,7 +7,9 @@ import '../atoms/app_text_field.dart';
 import '../repositories/survey_pack_repository.dart';
 
 class NuevaVisitaPage extends StatefulWidget {
-  const NuevaVisitaPage({super.key});
+  final Map<String, dynamic>? clienteInicial;
+
+  const NuevaVisitaPage({super.key, this.clienteInicial});
 
   @override
   State<NuevaVisitaPage> createState() => _NuevaVisitaPageState();
@@ -49,6 +51,10 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
           _clientesFiltrados = clientes;
           _packs = packs;
           _isLoading = false;
+          if (widget.clienteInicial != null) {
+            _clienteSeleccionado = widget.clienteInicial;
+            _paso = 2;
+          }
         });
       }
     } catch (e) {
@@ -57,15 +63,15 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
   }
 
   void _filtrarClientes(String query) {
+    final q = query.trim().toLowerCase();
     setState(() {
-      if (query.isEmpty) {
+      if (q.length < 2) {
         _clientesFiltrados = _clientes;
       } else {
         _clientesFiltrados = _clientes.where((c) {
           final name = (c['name'] ?? '').toLowerCase();
           final rif = (c['tax_id'] ?? '').toLowerCase();
           final code = (c['code_client_profit'] ?? '').toLowerCase();
-          final q = query.toLowerCase();
           return name.contains(q) || rif.contains(q) || code.contains(q);
         }).toList();
       }
@@ -212,8 +218,18 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
           child: AppTextField(
             controller: _searchController,
             labelText: 'Buscar cliente',
-            hintText: 'Nombre, RIF o código...',
+            hintText: 'Escribe al menos 2 letras (Nombre, RIF, Código)...',
             icon: Icons.search,
+            suffixIcon: _searchController.text.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.clear, size: 18),
+                    onPressed: () {
+                      _searchController.clear();
+                      _filtrarClientes('');
+                    },
+                  )
+                : null,
+            onChanged: _filtrarClientes,
             onSubmitted: _filtrarClientes,
           ),
         ),

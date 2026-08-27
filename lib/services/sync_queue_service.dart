@@ -121,6 +121,8 @@ class SyncQueueService {
     // anterior murió a mitad de request. Vuelven a 'pending' para que el
     // próximo drain las reintente (con dedup_key el backend evita duplicar).
     _resetInProgressOnBoot();
+    // Auto-resolver cualquier 409 que haya quedado marcado como fallo permanente
+    _resolveExistingIdempotentFailures();
 
     _connSub ??= _connectivity.onConnectivityChanged.listen((result) {
       // Igual que ConnectivityService.isConnected(): cualquier resultado
@@ -246,6 +248,15 @@ class SyncQueueService {
           await _retryNowWithoutIncrement(id);
           return;
         }
+      }
+
+      // 409 Conflict: Si la acción ya fue registrada en el servidor (ej: asistencia ya marcada hoy),
+      // se resuelve como éxito idempotente sin dejar error permanente en rojo.
+      if (result.statusCode == 409 && _isIdempotentConflict(row, result.body)) {
+        print('🤝 [SyncQueue] #$id $method $endpoint: conflicto 409 resuelto (ya existía en servidor)');
+        await _markSuccess(id, result.body);
+        await _invokeSuccessHandlers(row, result.body);
+        return;
       }
 
       // 4xx (no 401) → fallo permanente, no tiene sentido reintentar
@@ -420,6 +431,73 @@ class SyncQueueService {
     );
     await _emitCount();
     drain();
+  }
+
+  /// Descarta / elimina una operación fallida permanente.
+  Future<void> dismissFailed(int id) async {
+    final db = await _db.database;
+    await db.delete(
+      'pending_operations',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    print('🗑️ [SyncQueue] #$id descartada de la cola');
+    await _emitCount();
+  }
+
+  /// Descarta todas las operaciones fallidas permanentes.
+  Future<int> dismissAllFailed() async {
+    final db = await _db.database;
+    final count = await db.delete(
+      'pending_operations',
+      where: "status = 'failed_permanent'",
+    );
+    print('🗑️ [SyncQueue] $count operaciones fallidas descartadas');
+    await _emitCount();
+    return count;
+  }
+
+  /// Comprueba si un error 409 es un conflicto idempotente (el servidor ya tiene el registro).
+  bool _isIdempotentConflict(Map<String, dynamic> row, String responseBody) {
+    final entityType = (row['entity_type'] as String?)?.toLowerCase();
+    final bodyLower = responseBody.toLowerCase();
+    if (entityType == 'asistencia') {
+      return bodyLower.contains('ya marcaste') ||
+          bodyLower.contains('conflict') ||
+          bodyLower.contains('already');
+    }
+    if (entityType == 'ubicacion') {
+      return true;
+    }
+    if (bodyLower.contains('already exists') ||
+        bodyLower.contains('duplicat') ||
+        bodyLower.contains('ya existe')) {
+      return true;
+    }
+    return false;
+  }
+
+  /// Auto-resuelve fallos previos con 409 que hayan quedado como failed_permanent.
+  Future<void> _resolveExistingIdempotentFailures() async {
+    try {
+      final db = await _db.database;
+      final rows = await db.query(
+        'pending_operations',
+        where: "status = 'failed_permanent'",
+      );
+      for (final row in rows) {
+        final error = (row['last_error'] as String?) ?? '';
+        final id = row['id'] as int;
+        if (_isIdempotentConflict(row, error)) {
+          print('🧹 [SyncQueue] Auto-resolviendo error 409 previo en operación #$id');
+          await _markSuccess(id, error);
+          await _invokeSuccessHandlers(row, error);
+        }
+      }
+      await _emitCount();
+    } catch (e) {
+      print('⚠️ [SyncQueue] error resolviendo fallos previos: $e');
+    }
   }
 
   /// Borra operaciones exitosas anteriores a [keepDays] días.

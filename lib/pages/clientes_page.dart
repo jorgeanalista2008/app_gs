@@ -12,6 +12,7 @@ import '../services/sync_queue_service.dart';
 import '../services/connectivity_service.dart';
 import '../atoms/sync_status_chip.dart';
 import '../organisms/connection_wrapper.dart';
+import 'customer_details_page.dart';
 
 class ClientesPage extends StatefulWidget {
   const ClientesPage({super.key});
@@ -131,12 +132,13 @@ class _ClientesPageState extends State<ClientesPage>
     final queryRif = _normRif(rawQuery);
     List<ClienteModel> lista;
 
-    if (query.isEmpty) {
+    // Iniciar búsqueda a partir de 2 letras
+    if (query.length < 2) {
       lista = List.of(base);
     } else {
       lista = base.where((c) {
-        // Match RIF/código sin importar guiones o prefijo
-        if (queryRif.length >= 3) {
+        // Match RIF/código sin importar guiones o prefijo (a partir de 2 caracteres)
+        if (queryRif.length >= 2) {
           if (_normRif(c.taxId).contains(queryRif)) return true;
           if (_normRif(c.codeClientProfit).contains(queryRif)) return true;
         }
@@ -257,12 +259,33 @@ class _ClientesPageState extends State<ClientesPage>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mis Clientes'),
+        titleSpacing: 0,
+        title: const Text(
+          'Mis Clientes',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.white,
+          indicatorWeight: 3.5,
+          indicatorSize: TabBarIndicatorSize.tab,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white.withValues(alpha: 0.65),
+          labelStyle: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+            letterSpacing: 0.2,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontWeight: FontWeight.normal,
+            fontSize: 14,
+          ),
           tabs: [
             Tab(text: 'Clientes (${_clientes.length})'),
             Tab(text: 'Prospectos (${_prospectos.length})'),
@@ -277,7 +300,8 @@ class _ClientesPageState extends State<ClientesPage>
                 ? const SizedBox(
                     width: 18,
                     height: 18,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2),
                   )
                 : Icon(
                     _cercaDeMiActivo ? Icons.near_me : Icons.near_me_outlined,
@@ -286,8 +310,8 @@ class _ClientesPageState extends State<ClientesPage>
             onPressed: _obteniendoGps ? null : _toggleCercaDeMi,
           ),
           const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
-            child: SyncStatusChip(),
+            padding: EdgeInsets.only(right: 12.0),
+            child: Center(child: SyncStatusChip()),
           ),
         ],
       ),
@@ -308,14 +332,25 @@ class _ClientesPageState extends State<ClientesPage>
             child: AppTextField(
               controller: _searchController,
               labelText: 'Buscar cliente',
-              hintText: 'Nombre, RIF, código o teléfono...',
+              hintText: 'Escribe al menos 2 letras (Nombre, RIF, Código)...',
               icon: Icons.search,
-              onSubmitted: _filtrarClientes,
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, size: 18),
+                      tooltip: 'Limpiar búsqueda',
+                      onPressed: () {
+                        _searchController.clear();
+                        _aplicarFiltro();
+                      },
+                    )
+                  : null,
+              onChanged: (_) => _aplicarFiltro(),
+              onSubmitted: (_) => _aplicarFiltro(),
             ),
           ),
 
           // Contador de resultados
-          if (_clientesFiltrados.isNotEmpty && _searchController.text.isNotEmpty)
+          if (_clientesFiltrados.isNotEmpty && _searchController.text.trim().length >= 2)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               color: AppColors.primaryColor.withValues(alpha: 0.05),
@@ -474,60 +509,11 @@ class _ClientesPageState extends State<ClientesPage>
   }
 
   void _mostrarDetalleCliente(ClienteModel cliente) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40, height: 4,
-                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 30,
-                    backgroundColor: AppColors.primaryColor.withValues(alpha: 0.1),
-                    child: Text(
-                      cliente.name.isNotEmpty ? cliente.name[0].toUpperCase() : '?',
-                      style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.primaryColor),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(cliente.name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                        if (cliente.codeClientProfit.isNotEmpty)
-                          Text('Código: ${cliente.codeClientProfit}', style: TextStyle(color: Colors.grey[600])),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              const Divider(),
-              const SizedBox(height: 16),
-              if (cliente.taxId.isNotEmpty) _buildDetailRow(Icons.badge, 'RIF', cliente.taxId),
-              if (cliente.telefono.isNotEmpty) _buildDetailRow(Icons.phone, 'Teléfono', cliente.telefono),
-              if (cliente.email.isNotEmpty) _buildDetailRow(Icons.email, 'Email', cliente.email),
-              if (cliente.direccion.isNotEmpty) _buildDetailRow(Icons.location_on, 'Dirección', cliente.direccion),
-              if (cliente.tipo.isNotEmpty) _buildDetailRow(Icons.category, 'Tipo', cliente.tipo),
-              _buildDetailRow(Icons.check_circle, 'Estado', cliente.activo ? 'Activo' : 'Inactivo'),
-              const SizedBox(height: 16),
-            ],
-          ),
-        );
-      },
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CustomerDetailsPage(cliente: cliente),
+      ),
     );
   }
 

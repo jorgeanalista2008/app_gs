@@ -76,6 +76,18 @@ class VisitaModel {
     }
   }
 
+  String get fechaCompletada {
+    if (completedAt == null || completedAt!.isEmpty) return fechaRango;
+    try {
+      final dt = DateTime.parse(completedAt!);
+      final hora = dt.hour.toString().padLeft(2, '0');
+      final min = dt.minute.toString().padLeft(2, '0');
+      return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} $hora:$min';
+    } catch (_) {
+      return completedAt!;
+    }
+  }
+
   String get diaNumero {
     try {
       final date = DateTime.parse(visitDateFrom);

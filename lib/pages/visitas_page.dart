@@ -75,9 +75,29 @@ class _VisitasPageState extends State<VisitasPage> with SingleTickerProviderStat
     try {
       final visitas = await _visitaRepo.getVisitasLocales();
       if (mounted) {
+        final prog = visitas.where((v) => v.isPendiente).toList()
+          ..sort((a, b) {
+            final dtA = DateTime.tryParse(a.visitDateFrom) ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final dtB = DateTime.tryParse(b.visitDateFrom) ?? DateTime.fromMillisecondsSinceEpoch(0);
+            return dtB.compareTo(dtA);
+          });
+
+        final comp = visitas.where((v) => v.isCompletada).toList()
+          ..sort((a, b) {
+            final strA = (a.completedAt != null && a.completedAt!.isNotEmpty)
+                ? a.completedAt!
+                : a.visitDateFrom;
+            final strB = (b.completedAt != null && b.completedAt!.isNotEmpty)
+                ? b.completedAt!
+                : b.visitDateFrom;
+            final dtA = DateTime.tryParse(strA) ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final dtB = DateTime.tryParse(strB) ?? DateTime.fromMillisecondsSinceEpoch(0);
+            return dtB.compareTo(dtA);
+          });
+
         setState(() {
-          _programadas = visitas.where((v) => v.isPendiente).toList();
-          _completadas = visitas.where((v) => v.isCompletada).toList();
+          _programadas = prog;
+          _completadas = comp;
           _isLoading = false;
         });
         _aplicarFiltro();
@@ -427,13 +447,25 @@ class _VisitasPageState extends State<VisitasPage> with SingleTickerProviderStat
               const SizedBox(height: 10),
               Row(
                 children: [
-                  Icon(Icons.calendar_today, size: 12, color: Colors.grey[500]),
-                  const SizedBox(width: 6),
-                  Text(
-                    visita.fechaRango,
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  Icon(
+                    visita.isCompletada ? Icons.event_available : Icons.calendar_today,
+                    size: 13,
+                    color: visita.isCompletada ? Colors.green[700] : Colors.grey[500],
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      visita.isCompletada ? 'Realizada: ${visita.fechaCompletada}' : visita.fechaRango,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: visita.isCompletada ? FontWeight.w600 : FontWeight.normal,
+                        color: visita.isCompletada ? Colors.green[800] : Colors.grey[600],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   _buildStatusBadge(visita),
                 ],
               ),
@@ -460,8 +492,8 @@ class _VisitasPageState extends State<VisitasPage> with SingleTickerProviderStat
         icon = Icons.cloud_done;
       } else {
         color = Colors.blue;
-        text = 'Completada (Sin subir)';
-        icon = Icons.cloud_upload;
+        text = 'Por subir';
+        icon = Icons.cloud_upload_outlined;
       }
     }
 
@@ -520,18 +552,13 @@ class _VisitasPageState extends State<VisitasPage> with SingleTickerProviderStat
           children: [
             Icon(
               esProgramadas ? Icons.assignment_outlined : Icons.assignment_turned_in_outlined,
-              size: 80,
-              color: Colors.grey[300],
+              size: 60,
+              color: Colors.grey[400],
             ),
             const SizedBox(height: 16),
             Text(
-              _searchController.text.isEmpty
-                  ? (esProgramadas
-                      ? 'No tienes visitas programadas.'
-                      : 'No tienes visitas completadas.')
-                  : 'No se encontraron visitas',
-              style: const TextStyle(fontSize: 16, color: AppColors.textSecondary),
-              textAlign: TextAlign.center,
+              esProgramadas ? 'No hay visitas programadas' : 'No hay visitas completadas',
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
             ),
           ],
         ),
@@ -563,6 +590,11 @@ class _VisitasPageState extends State<VisitasPage> with SingleTickerProviderStat
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.white,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorWeight: 3,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
           tabs: [
             Tab(text: 'Programadas (${_programadas.length})'),
             Tab(text: 'Completadas (${_completadas.length})'),

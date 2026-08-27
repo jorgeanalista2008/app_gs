@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../atoms/avatar_widget.dart';
-import '../pages/profile_page.dart';
 import '../pages/clientes_page.dart';
 import '../pages/catalogo_page.dart';
 import '../pages/visitas_page.dart';
 import '../pages/admin_panel_page.dart';
-import '../pages/mapa_clientes_page.dart';
 import '../pages/crear_pregunta_page.dart';
 import '../pages/asistencia_page.dart';
+import '../pages/tasas_cambio_page.dart';
 
 class AppDrawer extends StatelessWidget {
   final String userName;
@@ -54,7 +53,7 @@ class AppDrawer extends StatelessWidget {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          // Header
+          // Header de usuario
           UserAccountsDrawerHeader(
             accountName: Text(
               userName,
@@ -70,7 +69,7 @@ class AppDrawer extends StatelessWidget {
 
           // Dashboard - Ambos roles
           ListTile(
-            leading: const Icon(Icons.dashboard, color: AppColors.primaryColor),
+            leading: const Icon(Icons.dashboard_rounded, color: AppColors.primaryColor),
             title: const Text('Dashboard'),
             onTap: () => Navigator.pop(context),
           ),
@@ -78,7 +77,7 @@ class AppDrawer extends StatelessWidget {
           // ─── ADMIN ───
           if (_isAdmin(rol))
             ListTile(
-              leading: const Icon(Icons.admin_panel_settings, color: Colors.teal),
+              leading: const Icon(Icons.admin_panel_settings_rounded, color: Colors.teal),
               title: const Text('Administración'),
               subtitle: const Text('Usuarios y Encuestas'),
               onTap: () {
@@ -93,7 +92,7 @@ class AppDrawer extends StatelessWidget {
           // ─── VENDEDOR ───
           if (_isVendedor(rol)) ...[
             ListTile(
-              leading: const Icon(Icons.people, color: AppColors.primaryColor),
+              leading: const Icon(Icons.people_alt_rounded, color: AppColors.primaryColor),
               title: const Text('Clientes'),
               onTap: () {
                 Navigator.pop(context);
@@ -104,7 +103,7 @@ class AppDrawer extends StatelessWidget {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.inventory_2, color: AppColors.primaryColor),
+              leading: const Icon(Icons.inventory_2_rounded, color: AppColors.primaryColor),
               title: const Text('Catálogo de Productos'),
               onTap: () {
                 Navigator.pop(context);
@@ -115,7 +114,7 @@ class AppDrawer extends StatelessWidget {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.assignment, color: AppColors.primaryColor),
+              leading: const Icon(Icons.assignment_rounded, color: AppColors.primaryColor),
               title: const Text('Mis Visitas'),
               onTap: () {
                 Navigator.pop(context);
@@ -126,7 +125,7 @@ class AppDrawer extends StatelessWidget {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.schedule, color: AppColors.secondaryColor),
+              leading: const Icon(Icons.schedule_rounded, color: AppColors.secondaryColor),
               title: const Text('Mi Jornada'),
               subtitle: const Text('Marcar entrada y salida'),
               onTap: () {
@@ -137,22 +136,8 @@ class AppDrawer extends StatelessWidget {
                 );
               },
             ),
-            // En la sección del vendedor (Deshabilitado por ahora):
-            /*
             ListTile(
-              leading: const Icon(Icons.map, color: Colors.teal),
-              title: const Text('Mapa de Clientes'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const MapaClientesPage()),
-                );
-              },
-            ),
-            */
-            ListTile(
-              leading: const Icon(Icons.add_task, color: Colors.deepPurple),
+              leading: const Icon(Icons.add_task_rounded, color: Colors.deepPurple),
               title: const Text('Crear Pregunta'),
               subtitle: const Text(
                 'Añade preguntas a la encuesta (offline)',
@@ -166,28 +151,32 @@ class AppDrawer extends StatelessWidget {
                 );
               },
             ),
-            const Divider(),
-            // Oculto temporalmente:
-            /*
-            ListTile(
-              leading: const Icon(Icons.person_outline, color: AppColors.primaryColor),
-              title: const Text('Mi Perfil'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ProfilePage()),
-                ).then((_) => onProfileUpdated?.call());
-              },
-            ),
-            */
           ],
+
+          const Divider(),
+
+          // ─── TASAS DE CAMBIO (PANTALLA DEDICADA) ───
+          ListTile(
+            leading: const Icon(Icons.currency_exchange_rounded, color: Colors.teal),
+            title: const Text('Tasas de Cambio'),
+            subtitle: const Text(
+              'USD, EUR y calculadora BCV',
+              style: TextStyle(fontSize: 11),
+            ),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const TasasCambioPage()),
+              );
+            },
+          ),
 
           const Divider(),
 
           // Cerrar Sesión - Ambos
           ListTile(
-            leading: const Icon(Icons.logout, color: AppColors.errorColor),
+            leading: const Icon(Icons.logout_rounded, color: AppColors.errorColor),
             title: const Text('Cerrar Sesión', style: TextStyle(color: AppColors.errorColor)),
             onTap: onLogout,
           ),

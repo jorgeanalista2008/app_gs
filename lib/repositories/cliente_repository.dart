@@ -330,7 +330,7 @@ class ClienteRepository {
     }
   }
 
-  /// Descarga clientes de API y los guarda en SQLite (solo insert)
+  /// Descarga clientes de API y los guarda en SQLite (upsert seguro)
   Future<int> sincronizarClientes({
     required String email,
     required String password,
@@ -343,71 +343,92 @@ class ClienteRepository {
       int guardados = 0;
 
       for (var cliente in clientes) {
-        List<Map<String, dynamic>> existente = await db.query(
-          'clientes',
-          where: 'id = ? OR server_id = ?',
-          whereArgs: [cliente.id, cliente.id],
-          limit: 1,
-        );
-
-        if (existente.isEmpty && cliente.taxId.isNotEmpty) {
-          existente = await db.query(
+        try {
+          // Buscar si ya existe localmente por id (case-insensitive), server_id o tax_id/código
+          List<Map<String, dynamic>> existente = await db.query(
             'clientes',
-            where: 'tax_id = ? AND is_prospect = 1',
-            whereArgs: [cliente.taxId],
+            where: 'LOWER(id) = LOWER(?) OR LOWER(server_id) = LOWER(?)',
+            whereArgs: [cliente.id, cliente.id],
             limit: 1,
           );
-        }
 
-        if (existente.isEmpty) {
-          await db.insert('clientes', {
-            'id': cliente.id,
-            'name': cliente.name,
-            'code_client_profit': cliente.codeClientProfit,
-            'tax_id': cliente.taxId,
-            'telefono': cliente.telefono,
-            'email': cliente.email,
-            'direccion': cliente.direccion,
-            'activo': cliente.activo ? 1 : 0,
-            'tipo': cliente.tipo,
-            'lat': cliente.lat,
-            'lng': cliente.lng,
-            'sincronizado': 1,
-            'fecha_sync': DateTime.now().toIso8601String(),
-          });
-          guardados++;
-        } else {
-          final localRow = existente.first;
-          final localId = localRow['id'] as String;
-          // Preservar lat/lng local si el vendedor las ajustó manualmente.
-          // Solo actualizar cuando backend trae valor y local está vacío.
-          final localLat = localRow['lat'];
-          final localLng = localRow['lng'];
-          await db.update(
-            'clientes',
-            {
-              'server_id': cliente.id,
-              'name': cliente.name,
-              'code_client_profit': cliente.codeClientProfit,
-              'tax_id': cliente.taxId,
-              'telefono': cliente.telefono,
-              'email': cliente.email,
-              'direccion': cliente.direccion,
-              'activo': cliente.activo ? 1 : 0,
-              'tipo': cliente.tipo,
-              if (localLat == null && cliente.lat != null) 'lat': cliente.lat,
-              if (localLng == null && cliente.lng != null) 'lng': cliente.lng,
-              'sincronizado': 1,
-              'is_prospect': 0, // Ya se oficializó en el backend
-              'fecha_sync': DateTime.now().toIso8601String(),
-            },
-            where: 'id = ?',
-            whereArgs: [localId],
-          );
+          if (existente.isEmpty && cliente.taxId.isNotEmpty) {
+            existente = await db.query(
+              'clientes',
+              where: 'tax_id = ?',
+              whereArgs: [cliente.taxId],
+              limit: 1,
+            );
+          }
+
+          if (existente.isEmpty && cliente.codeClientProfit.isNotEmpty) {
+            existente = await db.query(
+              'clientes',
+              where: 'code_client_profit = ?',
+              whereArgs: [cliente.codeClientProfit],
+              limit: 1,
+            );
+          }
+
+          if (existente.isEmpty) {
+            await db.insert(
+              'clientes',
+              {
+                'id': cliente.id,
+                'server_id': cliente.id,
+                'name': cliente.name,
+                'code_client_profit': cliente.codeClientProfit,
+                'tax_id': cliente.taxId,
+                'telefono': cliente.telefono,
+                'email': cliente.email,
+                'direccion': cliente.direccion,
+                'activo': cliente.activo ? 1 : 0,
+                'tipo': cliente.tipo,
+                'lat': cliente.lat,
+                'lng': cliente.lng,
+                'sincronizado': 1,
+                'is_prospect': 0,
+                'fecha_sync': DateTime.now().toIso8601String(),
+              },
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
+            guardados++;
+          } else {
+            final localRow = existente.first;
+            final localId = localRow['id'] as String;
+            // Preservar lat/lng local si el vendedor las ajustó manualmente.
+            // Solo actualizar cuando backend trae valor y local está vacío.
+            final localLat = localRow['lat'];
+            final localLng = localRow['lng'];
+            await db.update(
+              'clientes',
+              {
+                'server_id': cliente.id,
+                'name': cliente.name,
+                'code_client_profit': cliente.codeClientProfit,
+                'tax_id': cliente.taxId,
+                'telefono': cliente.telefono,
+                'email': cliente.email,
+                'direccion': cliente.direccion,
+                'activo': cliente.activo ? 1 : 0,
+                'tipo': cliente.tipo,
+                if (localLat == null && cliente.lat != null) 'lat': cliente.lat,
+                if (localLng == null && cliente.lng != null) 'lng': cliente.lng,
+                'sincronizado': 1,
+                'is_prospect': 0, // Ya se oficializó en el backend
+                'fecha_sync': DateTime.now().toIso8601String(),
+              },
+              where: 'id = ?',
+              whereArgs: [localId],
+            );
+            guardados++;
+          }
+        } catch (e) {
+          print('⚠️ [ClienteRepo] Error guardando cliente ${cliente.name} (${cliente.id}): $e');
         }
       }
 
-      print('✅ Sincronización de clientes completada ($guardados nuevos)');
+      print('✅ Sincronización de clientes completada ($guardados procesados)');
       return guardados;
     } catch (e) {
       print('❌ Error sincronizando clientes: $e');
@@ -478,64 +499,72 @@ class ClienteRepository {
       int guardados = 0;
 
       for (var prospecto in prospectos) {
-        // Buscar si ya existe localmente por id (o server_id si ya se subió)
-        List<Map<String, dynamic>> existente = await db.query(
-          'clientes',
-          where: 'id = ? OR server_id = ?',
-          whereArgs: [prospecto.id, prospecto.id],
-          limit: 1,
-        );
-
-        if (existente.isEmpty && prospecto.taxId.isNotEmpty) {
-          existente = await db.query(
+        try {
+          // Buscar si ya existe localmente por id (o server_id si ya se subió)
+          List<Map<String, dynamic>> existente = await db.query(
             'clientes',
-            where: 'tax_id = ? AND is_prospect = 1',
-            whereArgs: [prospecto.taxId],
+            where: 'LOWER(id) = LOWER(?) OR LOWER(server_id) = LOWER(?)',
+            whereArgs: [prospecto.id, prospecto.id],
             limit: 1,
           );
-        }
 
-        if (existente.isNotEmpty) {
-          final localSynced = (existente.first['sincronizado'] as int?) ?? 1;
-          if (localSynced == 0) {
-            // Conservar versión local pendiente de envío
-            continue;
+          if (existente.isEmpty && prospecto.taxId.isNotEmpty) {
+            existente = await db.query(
+              'clientes',
+              where: 'tax_id = ? AND is_prospect = 1',
+              whereArgs: [prospecto.taxId],
+              limit: 1,
+            );
           }
-        }
 
-        final row = {
-          'name': prospecto.name,
-          'tax_id': prospecto.taxId,
-          'telefono': prospecto.telefono,
-          'email': prospecto.email,
-          'direccion': prospecto.direccion,
-          'notes': prospecto.notes,
-          'contact_name': prospecto.contactName,
-          'city': prospecto.city,
-          'zone_code': prospecto.zoneCode,
-          'next_followup_date': prospecto.nextFollowupDate,
-          'sincronizado': 1, // Ya está en el servidor
-          'is_prospect': 1,
-          'fecha_sync': DateTime.now().toIso8601String(),
-        };
+          if (existente.isNotEmpty) {
+            final localSynced = (existente.first['sincronizado'] as int?) ?? 1;
+            if (localSynced == 0) {
+              // Conservar versión local pendiente de envío
+              continue;
+            }
+          }
 
-        if (existente.isEmpty) {
-          // Es un prospecto nuevo del servidor, lo insertamos usando el id del servidor
-          row['id'] = prospecto.id;
-          row['server_id'] = prospecto.id;
-          await db.insert('clientes', row);
-          guardados++;
-        } else {
-          // Existe localmente, actualizamos
-          final localId = existente.first['id'] as String;
-          row['server_id'] = prospecto.id;
-          await db.update(
-            'clientes',
-            row,
-            where: 'id = ?',
-            whereArgs: [localId],
-          );
-          guardados++;
+          final row = {
+            'name': prospecto.name,
+            'tax_id': prospecto.taxId,
+            'telefono': prospecto.telefono,
+            'email': prospecto.email,
+            'direccion': prospecto.direccion,
+            'notes': prospecto.notes,
+            'contact_name': prospecto.contactName,
+            'city': prospecto.city,
+            'zone_code': prospecto.zoneCode,
+            'next_followup_date': prospecto.nextFollowupDate,
+            'sincronizado': 1, // Ya está en el servidor
+            'is_prospect': 1,
+            'fecha_sync': DateTime.now().toIso8601String(),
+          };
+
+          if (existente.isEmpty) {
+            // Es un prospecto nuevo del servidor, lo insertamos usando el id del servidor
+            row['id'] = prospecto.id;
+            row['server_id'] = prospecto.id;
+            await db.insert(
+              'clientes',
+              row,
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
+            guardados++;
+          } else {
+            // Existe localmente, actualizamos
+            final localId = existente.first['id'] as String;
+            row['server_id'] = prospecto.id;
+            await db.update(
+              'clientes',
+              row,
+              where: 'id = ?',
+              whereArgs: [localId],
+            );
+            guardados++;
+          }
+        } catch (e) {
+          print('⚠️ [ClienteRepo] Error guardando prospecto ${prospecto.name} (${prospecto.id}): $e');
         }
       }
 

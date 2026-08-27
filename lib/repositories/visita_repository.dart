@@ -8,7 +8,7 @@ class VisitaRepository {
   Future<List<VisitaModel>> getVisitasLocales() async {
     final db = await _repo.getListLocal<VisitaModel>(
       table: 'visitas',
-      orderBy: 'visit_date_from ASC',
+      orderBy: 'COALESCE(completed_at, visit_date_from) DESC, visit_date_from DESC',
       fromJson: (json) => VisitaModel.fromJson(json),
     );
     return db;
@@ -25,7 +25,7 @@ class VisitaRepository {
       '''SELECT * FROM visitas 
          WHERE visit_date_from >= ? 
          AND visit_date_to <= ? 
-         ORDER BY visit_date_from ASC 
+         ORDER BY COALESCE(completed_at, visit_date_from) DESC, visit_date_from DESC 
          LIMIT ? OFFSET ?''',
       [dateFrom, dateTo, limit, (page - 1) * limit],
     );
@@ -70,7 +70,7 @@ class VisitaRepository {
       table: 'visitas',
       where: 'status = ?',
       whereArgs: [estado],
-      orderBy: 'visit_date_from ASC',
+      orderBy: 'COALESCE(completed_at, visit_date_from) DESC, visit_date_from DESC',
       fromJson: (json) => VisitaModel.fromJson(json),
     );
   }
