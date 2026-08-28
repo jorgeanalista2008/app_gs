@@ -273,19 +273,22 @@ class _CrearPreguntaPageState extends State<CrearPreguntaPage> {
                     : Column(
                         children: _misPreguntas.map((p) {
                           final sync = p['sincronizado'] == 1;
-                          return ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: Icon(
-                              sync ? Icons.cloud_done : Icons.cloud_upload,
-                              color: sync ? Colors.green : Colors.orange,
-                            ),
-                            title: Text(
-                              p['descripcion']?.toString() ?? '',
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                            subtitle: Text(
-                              '${p['tipo']}${p['es_requerida'] == 1 ? ' • Obligatoria' : ''} • ${sync ? 'Sincronizada' : 'Pendiente'}',
-                              style: const TextStyle(fontSize: 11),
+                          return Material(
+                            color: Colors.transparent,
+                            child: ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(
+                                sync ? Icons.cloud_done : Icons.cloud_upload,
+                                color: sync ? Colors.green : Colors.orange,
+                              ),
+                              title: Text(
+                                p['descripcion']?.toString() ?? '',
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                              subtitle: Text(
+                                '${p['tipo']}${p['es_requerida'] == 1 ? ' • Obligatoria' : ''} • ${sync ? 'Sincronizada' : 'Pendiente'}',
+                                style: const TextStyle(fontSize: 11),
+                              ),
                             ),
                           );
                         }).toList(),

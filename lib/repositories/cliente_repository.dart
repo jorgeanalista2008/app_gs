@@ -4,6 +4,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 import '../core/env.dart';
 import '../models/cliente_model.dart';
+import '../services/connectivity_service.dart';
 import '../services/database_helper.dart';
 import '../services/sync_queue_service.dart';
 import '../services/image_upload_service.dart';
@@ -12,6 +13,7 @@ import 'generic_repository.dart';
 class ClienteRepository {
   final GenericRepository _repo = GenericRepository.instance;
   final DatabaseHelper _db = DatabaseHelper.instance;
+  final ConnectivityService _connectivity = ConnectivityService.instance;
   static const _uuid = Uuid();
   static const String entityType = 'customer';
 
@@ -292,6 +294,10 @@ class ClienteRepository {
     required String email,
     required String password,
   }) async {
+    if (!await _connectivity.isConnected()) {
+      print('📴 [ClienteRepository] Sin conexión, se omite fetchClientesFromApi');
+      return [];
+    }
     try {
       final url = Uri.parse('${Env.apiBaseUrl}/salesperson/auth/customers');
 
@@ -313,7 +319,7 @@ class ClienteRepository {
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(payload),
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 15));
 
       print('📊 Status: ${response.statusCode}');
 

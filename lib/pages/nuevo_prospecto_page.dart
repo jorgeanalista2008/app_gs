@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../core/app_colors.dart';
+import '../core/feature_flags.dart';
 import '../repositories/cliente_repository.dart';
 import '../atoms/app_button.dart';
 import '../atoms/app_text_field.dart';
@@ -333,36 +334,35 @@ class _NuevoProspectoPageState extends State<NuevoProspectoPage> {
               ),
               const SizedBox(height: 16),
                _ubicacionCard(),
-              // Oculto temporalmente para versión futura:
-              /*
-              const SizedBox(height: 16),
-              const Text(
-                'Evidencias fotográficas (opcional)',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: PhotoCaptureWidget(
-                      label: 'Foto del local',
-                      onPhotoTaken: (file, _) {
-                        _photo1Path = file?.path;
-                      },
+              if (FeatureFlags.fotosProspectoHabilitadas) ...[
+                const SizedBox(height: 16),
+                const Text(
+                  'Evidencias fotográficas (opcional)',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: PhotoCaptureWidget(
+                        label: 'Foto del local',
+                        onPhotoTaken: (file, _) {
+                          _photo1Path = file?.path;
+                        },
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: PhotoCaptureWidget(
-                      label: 'Foto adicional',
-                      onPhotoTaken: (file, _) {
-                        _photo2Path = file?.path;
-                      },
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: PhotoCaptureWidget(
+                        label: 'Foto adicional',
+                        onPhotoTaken: (file, _) {
+                          _photo2Path = file?.path;
+                        },
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              */
+                  ],
+                ),
+              ],
               const SizedBox(height: 24),
               AppButton(
                 text: _saving ? 'Guardando…' : 'Guardar Prospecto',

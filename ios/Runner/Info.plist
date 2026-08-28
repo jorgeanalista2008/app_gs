@@ -46,7 +46,9 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Necesitamos la cámara para escanear códigos de barras</string>
+	<string>Necesitamos la cámara para escanear códigos de barras y tomar fotos de evidencia en visitas</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Necesitamos acceso a tu galería para adjuntar fotos de evidencia en visitas</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Necesitamos tu ubicación para registrar dónde se realiza el escaneo.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

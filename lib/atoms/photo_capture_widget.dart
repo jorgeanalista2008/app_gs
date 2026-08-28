@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import '../core/app_colors.dart';
@@ -63,16 +64,6 @@ class _PhotoCaptureWidgetState extends State<PhotoCaptureWidget> {
   }
 
   Future<void> _tomarFoto() async {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('La captura de imágenes está deshabilitada temporalmente.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-    }
-    return;
-    /* Deshabilitado temporalmente:
     try {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.camera,
@@ -110,7 +101,10 @@ class _PhotoCaptureWidgetState extends State<PhotoCaptureWidget> {
       }
     } catch (e) {
       print('❌ Error al tomar foto: $e');
-      if (mounted) {
+      if (!mounted) return;
+      if (_esPermisoDenegado(e)) {
+        _mostrarDialogoPermisoDenegado('cámara');
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al tomar foto: $e'),
@@ -119,20 +113,9 @@ class _PhotoCaptureWidgetState extends State<PhotoCaptureWidget> {
         );
       }
     }
-    */
   }
 
   Future<void> _seleccionarDeGaleria() async {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('La selección de imágenes desde la galería está deshabilitada temporalmente.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-    }
-    return;
-    /* Deshabilitado temporalmente:
     try {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.gallery,
@@ -172,8 +155,53 @@ class _PhotoCaptureWidgetState extends State<PhotoCaptureWidget> {
       }
     } catch (e) {
       print('❌ Error al seleccionar foto: $e');
+      if (!mounted) return;
+      if (_esPermisoDenegado(e)) {
+        _mostrarDialogoPermisoDenegado('galería');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al seleccionar foto: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
-    */
+  }
+
+  /// image_picker reporta permiso denegado como PlatformException con
+  /// códigos como `camera_access_denied` / `photo_access_denied`.
+  bool _esPermisoDenegado(Object e) {
+    if (e is! PlatformException) return false;
+    final code = e.code.toLowerCase();
+    return code.contains('denied') || code.contains('permission');
+  }
+
+  Future<void> _mostrarDialogoPermisoDenegado(String recurso) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Permiso necesario'),
+        content: Text(
+          'La app no tiene permiso para usar la $recurso. '
+          'Actívalo en los ajustes del dispositivo para poder adjuntar fotos.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Geolocator.openAppSettings();
+            },
+            child: const Text('Abrir ajustes'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<Position?> _capturarUbicacion() async {

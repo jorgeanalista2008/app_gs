@@ -2,11 +2,20 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../core/env.dart';
 import '../services/auth_service.dart';
+import '../services/connectivity_service.dart';
 import '../services/database_helper.dart';
+
+/// Timeout para llamadas ad-hoc (getList/getById/post). Más corto que el de
+/// [executeRequest] porque estas se llaman directo desde la UI (bloquean una
+/// pantalla) y ya están protegidas por el chequeo de conectividad previo —
+/// si llegan a disparar la petición real, 15s alcanza sin colgar la UI tanto
+/// como los 30s originales.
+const _adHocTimeout = Duration(seconds: 15);
 
 class GenericRepository {
   final DatabaseHelper _db = DatabaseHelper.instance;
   final AuthService _authService = AuthService.instance;
+  final ConnectivityService _connectivity = ConnectivityService.instance;
 
   GenericRepository._();
   static final GenericRepository instance = GenericRepository._();
@@ -32,6 +41,10 @@ class GenericRepository {
     String? nestedKey,
     required T Function(Map<String, dynamic> json) fromJson,
   }) async {
+    if (!await _connectivity.isConnected()) {
+      print('📴 [GenericRepository] Sin conexión, se omite getListOnline($path)');
+      return [];
+    }
     try {
       final uri = Uri.parse('${Env.apiBaseUrl}$path');
       final url = queryParams != null
@@ -50,7 +63,7 @@ class GenericRepository {
       final response = await http.get(
         url,
         headers: headers,
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(_adHocTimeout);
 
       print('📊 Status: ${response.statusCode}');
 
@@ -59,8 +72,14 @@ class GenericRepository {
       }
 
       if (response.statusCode == 401) {
-        await _authService.logout();
-        throw Exception('Sesión expirada.');
+        // Solo el JWT online quedó inválido/vencido — NO desloguear la
+        // sesión local. Esto corre durante sync de fondo; un logout() acá
+        // borraba la sesión del vendedor sin que él hiciera nada, y dejaba
+        // el resto del ciclo de sync sin usuario ("No hay usuario logueado
+        // localmente"). El próximo ciclo reintenta el login online solo.
+        _authService.onlineToken = null;
+        print('🔑 [GenericRepository] Token online inválido (401), se reintentará login en el próximo ciclo');
+        return [];
       }
 
       print('❌ Error HTTP: ${response.statusCode}');
@@ -76,6 +95,10 @@ class GenericRepository {
     required String path,
     required T Function(Map<String, dynamic> json) fromJson,
   }) async {
+    if (!await _connectivity.isConnected()) {
+      print('📴 [GenericRepository] Sin conexión, se omite getByIdOnline($path)');
+      return null;
+    }
     try {
       final url = Uri.parse('${Env.apiBaseUrl}$path');
       final headers = await _getHeaders();
@@ -89,7 +112,7 @@ class GenericRepository {
       final response = await http.get(
         url,
         headers: headers,
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(_adHocTimeout);
 
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
@@ -113,6 +136,10 @@ class GenericRepository {
     required Map<String, dynamic> body,
     T Function(Map<String, dynamic> json)? fromJson,
   }) async {
+    if (!await _connectivity.isConnected()) {
+      print('📴 [GenericRepository] Sin conexión, se omite postOnline($path)');
+      return null;
+    }
     try {
       final url = Uri.parse('${Env.apiBaseUrl}$path');
       final headers = await _getHeaders();
@@ -134,7 +161,7 @@ class GenericRepository {
         url,
         headers: headers,
         body: jsonEncode(body),
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(_adHocTimeout);
 
       print('📊 Status: ${response.statusCode}');
 

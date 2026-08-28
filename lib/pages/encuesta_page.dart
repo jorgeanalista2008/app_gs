@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
+import '../core/feature_flags.dart';
 import '../models/visita_model.dart';
 import '../models/encuesta_model.dart';
 import '../models/pregunta_model.dart';
@@ -216,8 +217,10 @@ class _EncuestaPageState extends State<EncuestaPage> {
                     _buildHeaderVisita(),
                     const SizedBox(height: 24),
                     _buildPreguntasSection(),
-                    // const SizedBox(height: 24),
-                    // _buildFotosSection(), // Oculto temporalmente para versión futura
+                    if (FeatureFlags.fotosVisitaHabilitadas) ...[
+                      const SizedBox(height: 24),
+                      _buildFotosSection(),
+                    ],
                     const SizedBox(height: 32),
                     AppButton(
                       text: 'GUARDAR ENCUESTA',

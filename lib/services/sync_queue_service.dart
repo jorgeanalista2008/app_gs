@@ -52,6 +52,11 @@ class SyncQueueService {
   static const List<int> _backoffSeconds = [30, 120, 480, 1800];
   static const int _defaultMaxAttempts = 10;
   static const Duration _periodicInterval = Duration(minutes: 2);
+  // 15s en vez de los 30s por defecto de executeRequest: el drain es batch
+  // en background, no bloquea UI, pero si el servidor está caído cada fila
+  // paga este timeout antes de abortar el resto — 15s ya alcanza para
+  // distinguir "lento" de "caído" sin duplicar la espera.
+  static const Duration _queueRequestTimeout = Duration(seconds: 15);
 
   /// Listeners para que la UI reaccione a cambios de cola.
   final StreamController<int> _pendingCountController =
@@ -123,6 +128,9 @@ class SyncQueueService {
     _resetInProgressOnBoot();
     // Auto-resolver cualquier 409 que haya quedado marcado como fallo permanente
     _resolveExistingIdempotentFailures();
+    // Reactivar 'ubicacion' que hayan quedado failed_permanent de antes de
+    // este cambio — ese tracking nunca debe quedar varado, sigue reintentando.
+    _reactivateFailedUbicaciones();
 
     _connSub ??= _connectivity.onConnectivityChanged.listen((result) {
       // Igual que ConnectivityService.isConnected(): cualquier resultado
@@ -155,6 +163,23 @@ class SyncQueueService {
       }
     } catch (e) {
       print('⚠️  [SyncQueue] reset in_progress falló: $e');
+    }
+  }
+
+  Future<void> _reactivateFailedUbicaciones() async {
+    try {
+      final db = await _db.database;
+      final now = DateTime.now().toUtc().toIso8601String();
+      final n = await db.update(
+        'pending_operations',
+        {'status': 'pending', 'next_retry_at': now, 'updated_at': now},
+        where: "status = 'failed_permanent' AND entity_type = 'ubicacion'",
+      );
+      if (n > 0) {
+        print('♻️  [SyncQueue] reactivadas $n ubicaciones que habían quedado failed_permanent');
+      }
+    } catch (e) {
+      print('⚠️  [SyncQueue] reactivar ubicaciones falló: $e');
     }
   }
 
@@ -192,7 +217,15 @@ class SyncQueueService {
       }
       print('🔁 [SyncQueue] procesando ${rows.length} operaciones');
       for (final row in rows) {
-        await _processRow(row);
+        final networkDown = await _processRow(row);
+        // Fallo de transporte (timeout/socket), no HTTP: el servidor está
+        // inalcanzable, así que las demás filas del batch fallarían igual.
+        // Se aborta el resto (quedan 'pending' con su propio backoff) en vez
+        // de pagar el timeout completo 50 veces seguidas (hasta 25min).
+        if (networkDown) {
+          print('📴 [SyncQueue] servidor inalcanzable, abortando resto del batch (${rows.length} - fila actual pendientes)');
+          break;
+        }
       }
     } catch (e) {
       print('❌ [SyncQueue] drain error: $e');
@@ -203,7 +236,10 @@ class SyncQueueService {
     }
   }
 
-  Future<void> _processRow(Map<String, dynamic> row) async {
+  /// Procesa una fila. Devuelve `true` si el fallo fue de transporte
+  /// (timeout/socket) — señal de que el servidor está inalcanzable y no
+  /// vale la pena seguir intentando el resto del batch ahora mismo.
+  Future<bool> _processRow(Map<String, dynamic> row) async {
     final id = row['id'] as int;
     final method = row['http_method'] as String;
     final endpoint = row['endpoint'] as String;
@@ -217,7 +253,7 @@ class SyncQueueService {
         payload = jsonDecode(payloadJson) as Map<String, dynamic>;
       } catch (e) {
         await _markFailedPermanent(id, 'payload JSON inválido: $e');
-        return;
+        return false;
       }
     }
 
@@ -228,6 +264,7 @@ class SyncQueueService {
         method: method,
         endpoint: endpoint,
         payload: payload,
+        timeout: _queueRequestTimeout,
       );
 
       // 2xx → éxito
@@ -235,7 +272,7 @@ class SyncQueueService {
         await _markSuccess(id, result.body);
         print('✅ [SyncQueue] #$id $method $endpoint OK (${result.statusCode})');
         await _invokeSuccessHandlers(row, result.body);
-        return;
+        return false;
       }
 
       // 401 → re-auth y reintento inmediato (una vez por drain)
@@ -246,7 +283,7 @@ class SyncQueueService {
         if (ok) {
           // Reauth exitosa: reintenta inmediato sin gastar un intento.
           await _retryNowWithoutIncrement(id);
-          return;
+          return false;
         }
       }
 
@@ -256,29 +293,47 @@ class SyncQueueService {
         print('🤝 [SyncQueue] #$id $method $endpoint: conflicto 409 resuelto (ya existía en servidor)');
         await _markSuccess(id, result.body);
         await _invokeSuccessHandlers(row, result.body);
-        return;
+        return false;
       }
 
-      // 4xx (no 401) → fallo permanente, no tiene sentido reintentar
+      // 4xx (no 401) → normalmente fallo permanente, no tiene sentido reintentar.
+      // Excepción: 'ubicacion' es tracking GPS que debe llegar sí o sí — nunca
+      // se descarta, solo se reintenta con backoff en vez de marcarse fallida.
+      final entityType = row['entity_type'] as String?;
       if (result.statusCode >= 400 &&
           result.statusCode < 500 &&
           result.statusCode != 401 &&
           result.statusCode != 408 &&
-          result.statusCode != 429) {
+          result.statusCode != 429 &&
+          entityType != 'ubicacion') {
         await _markFailedPermanent(id, 'HTTP ${result.statusCode}: ${result.body}');
-        return;
+        return false;
       }
 
-      // 5xx, 401 sin reauth, 408, 429 → backoff
+      // 5xx, 401 sin reauth, 408, 429, o 4xx de 'ubicacion' → backoff
       await _scheduleRetry(
         id,
         attempts,
         maxAttempts,
         'HTTP ${result.statusCode}: ${_truncate(result.body, 200)}',
+        entityType: entityType,
       );
+      return false;
     } catch (e) {
       // Timeout/red → backoff
-      await _scheduleRetry(id, attempts, maxAttempts, e.toString());
+      await _scheduleRetry(id, attempts, maxAttempts, e.toString(), entityType: row['entity_type'] as String?);
+      // TimeoutException / SocketException / ClientException (conexión rechazada,
+      // DNS falló, host inalcanzable) → fallo de transporte: el servidor no
+      // respondió, así que el resto del batch fallaría igual. Se le avisa a
+      // drain() para que corte el batch en vez de pagar el timeout completo
+      // en cada una de las filas restantes.
+      final msg = e.toString();
+      final isTransportFailure = msg.contains('TimeoutException') ||
+          msg.contains('SocketException') ||
+          msg.contains('ClientException') ||
+          msg.contains('Connection') ||
+          msg.contains('Failed host lookup');
+      return isTransportFailure;
     }
   }
 
@@ -361,11 +416,14 @@ class SyncQueueService {
     int id,
     int currentAttempts,
     int maxAttempts,
-    String error,
-  ) async {
+    String error, {
+    String? entityType,
+  }) async {
     final db = await _db.database;
     final nextAttempt = currentAttempts + 1;
-    if (nextAttempt >= maxAttempts) {
+    // 'ubicacion' es tracking GPS que debe llegar sí o sí — nunca se marca
+    // fallido permanente, sigue reintentando indefinido al backoff tope.
+    if (nextAttempt >= maxAttempts && entityType != 'ubicacion') {
       await _markFailedPermanent(id, 'max attempts: $error');
       return;
     }
@@ -403,11 +461,16 @@ class SyncQueueService {
   }
 
   /// Operaciones fallidas permanentes (para UI de revisión manual).
+  ///
+  /// Excluye 'ubicacion': es tracking GPS que ya no se marca fallido
+  /// permanente (ver [_scheduleRetry]), pero filas viejas de antes de ese
+  /// cambio pueden seguir en la tabla — no deben salir en el banner de
+  /// errores que ve el vendedor, ese tracking sigue reintentando solo.
   Future<List<Map<String, dynamic>>> getFailedPermanent({int limit = 100}) async {
     final db = await _db.database;
     return db.query(
       'pending_operations',
-      where: "status = 'failed_permanent'",
+      where: "status = 'failed_permanent' AND entity_type != 'ubicacion'",
       orderBy: 'updated_at DESC',
       limit: limit,
     );

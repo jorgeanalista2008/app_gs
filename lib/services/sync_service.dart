@@ -769,6 +769,11 @@ class SyncService {
       await marcarTodoSincronizado();
 
       // 3. Descargar datos actualizados (clientes, visitas, preguntas)
+      // Re-autentica de nuevo (no reusa `autenticado` de arriba): el JWT del
+      // backend puede tener TTL corto, y para cuando se llega acá ya se
+      // drenó la cola completa + subieron visitas — el token del inicio del
+      // ciclo puede haber vencido, causando 401 en /survey/packs y compañía
+      // (visto en producción: los packs dejaban de aparecer).
       print('📥 [SyncService] Descargando datos desde el servidor...');
       await descargarDatosFromServer();
 

@@ -71,9 +71,14 @@ class _DashboardContentState extends State<DashboardContent> {
       }
     });
 
+    // pendingCount cambia con cada operación encolada (p. ej. cada ping GPS
+    // cada 1min) — solo refresca contadores locales, sin volver a pegarle
+    // a la red (eso lo dispara únicamente el fin de un ciclo de sync real,
+    // arriba). Antes llamaba _loadData completo, que re-sincronizaba
+    // clientes por red en cada ubicación encolada.
     _pendingCountSub = SyncQueueService.instance.pendingCountStream.listen((_) {
       if (mounted) {
-        _loadData(showSpinner: false);
+        _loadData(showSpinner: false, refreshFromNetwork: false);
       }
     });
   }
@@ -86,7 +91,7 @@ class _DashboardContentState extends State<DashboardContent> {
     super.dispose();
   }
 
-  Future<void> _loadData({bool showSpinner = true}) async {
+  Future<void> _loadData({bool showSpinner = true, bool refreshFromNetwork = true}) async {
     if (showSpinner) setState(() => _isLoading = true);
 
     try {
@@ -97,9 +102,13 @@ class _DashboardContentState extends State<DashboardContent> {
         await _loadAdminStats(db);
       } else {
         // Intentar sincronizar clientes con backend (no bloquea si offline).
-        await _sincronizarClientesSiOnline();
+        if (refreshFromNetwork) {
+          await _sincronizarClientesSiOnline();
+        }
         await _loadVendedorStats(db);
-        _fetchTasasBcv();
+        if (refreshFromNetwork) {
+          _fetchTasasBcv();
+        }
       }
 
       if (mounted) setState(() => _isLoading = false);
@@ -108,9 +117,20 @@ class _DashboardContentState extends State<DashboardContent> {
     }
   }
 
+  DateTime? _lastClienteSync;
+
   /// Trae clientes del backend si hay conexión + credenciales locales.
   /// Silencioso: cualquier error queda en logs, no rompe el dashboard.
+  ///
+  /// Throttlada a 1 vez por minuto: esta función se dispara cada vez que
+  /// termina un ciclo de sync (2+ streams distintos pueden emitir casi a
+  /// la vez), y sin freno pega el POST /salesperson/auth/customers varias
+  /// veces seguidas por el mismo evento de sync.
   Future<void> _sincronizarClientesSiOnline() async {
+    final now = DateTime.now();
+    if (_lastClienteSync != null && now.difference(_lastClienteSync!) < const Duration(minutes: 1)) {
+      return;
+    }
     try {
       final online = await ConnectivityService.instance.isConnected();
       if (!online) return;
@@ -120,6 +140,7 @@ class _DashboardContentState extends State<DashboardContent> {
       if (email == null || email.isEmpty || password == null || password.isEmpty) {
         return;
       }
+      _lastClienteSync = now;
       await ClienteRepository().sincronizarClientes(email: email, password: password);
     } catch (e) {
       print('⚠️ Dashboard sync clientes: $e');
