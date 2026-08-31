@@ -158,16 +158,22 @@ class BiometricService {
         return false;
       }
 
-      // 2. Obtener usuario local (sin validar contraseña)
-      final userLocal = await DatabaseHelper.instance.getUsuario(username);
+      // 2. Obtener usuario local por username (sin validar contraseña).
+      // `getUsuario` busca por `id` (UUID) — con el username nunca coincide.
+      final userLocal = await DatabaseHelper.instance.getUsuarioPorUsername(username);
       if (userLocal == null) {
         print('❌ [BiometricService] Usuario $username no encontrado');
         return false;
       }
+      final userId = userLocal['id']?.toString();
+      if (userId == null) {
+        print('❌ [BiometricService] Usuario $username sin id local');
+        return false;
+      }
 
-      // 3. Guardar sesión en AuthService
+      // 3. Guardar sesión en AuthService (userId real, no el username).
       await AuthService.instance.setUserSession(
-        userId: username,
+        userId: userId,
         username: username,
         role: userLocal['role']?.toString() ?? 'vendedor',
       );

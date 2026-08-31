@@ -2,9 +2,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../services/database_helper.dart';
+import '../services/sync_queue_service.dart';
 import '../models/pregunta_model.dart';
 import '../atoms/app_text_field.dart';
 import '../repositories/survey_pack_repository.dart';
+import '../repositories/generic_repository.dart';
 
 class NuevaVisitaPage extends StatefulWidget {
   final Map<String, dynamic>? clienteInicial;
@@ -142,6 +144,37 @@ class _NuevaVisitaPageState extends State<NuevaVisitaPage> {
           ...visitData,
         });
         print('🆕 Creada visita manual ad-hoc con ID: $visitaId');
+
+        // Auto-agendar en el servidor de inmediato (PENDING). Antes esta
+        // visita solo existía local hasta completarse — no aparecía en la
+        // web ni en /admin/scheduled-visits mientras tanto. Se encola (no
+        // POST directo) para que el mismo mecanismo de retry+backoff+dedup
+        // de SyncQueueService la reintente si no hay red ahora mismo.
+        final salespersonId = await GenericRepository.instance.getUserId();
+        if (salespersonId != null) {
+          final userLocal = await _db.getUsuario(salespersonId);
+          if (userLocal != null) {
+            await SyncQueueService.instance.enqueue(
+              entityType: 'visit_schedule',
+              entityLocalId: visitaId,
+              operation: 'create',
+              httpMethod: 'POST',
+              endpoint: '/salesperson/auth/schedules/create',
+              payload: {
+                'email': userLocal['username'],
+                'password': userLocal['password'],
+                'customer_id': _clienteSeleccionado!['id'],
+                'visit_date_from': visitData['visit_date_from'],
+                'visit_date_to': visitData['visit_date_to'],
+                'priority': _prioridad,
+                if (_notasController.text.trim().isNotEmpty)
+                  'notes': _notasController.text.trim(),
+                'pack_id': _packSeleccionado!.id,
+              },
+            );
+            print('📤 [NuevaVisita] agenda encolada para subir: $visitaId');
+          }
+        }
       }
 
       print('✅ Visita guardada con pack: ${_packSeleccionado!.name} y ${questionIds.length} preguntas');

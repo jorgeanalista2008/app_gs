@@ -1,8 +1,47 @@
+import 'dart:convert';
 import '../models/visita_model.dart';
+import '../services/database_helper.dart';
+import '../services/sync_queue_service.dart';
 import 'generic_repository.dart';
 
 class VisitaRepository {
   final GenericRepository _repo = GenericRepository.instance;
+  static const String scheduleEntityType = 'visit_schedule';
+
+  /// Registra handler en cola para mapear el server_id de una agenda
+  /// ad-hoc ("Nueva Visita") tras subirse. Llamar UNA VEZ en main.dart.
+  static void registerSyncHandlers() {
+    SyncQueueService.instance.registerSuccessHandler(
+      scheduleEntityType,
+      _onScheduleCreated,
+    );
+  }
+
+  static Future<void> _onScheduleCreated(
+    Map<String, dynamic> operation,
+    String responseBody,
+  ) async {
+    final localId = operation['entity_local_id']?.toString();
+    if (localId == null) return;
+    try {
+      final decoded = jsonDecode(responseBody);
+      final serverId = decoded is Map<String, dynamic>
+          ? decoded['id']?.toString()
+          : null;
+      if (serverId == null) {
+        print('⚠️ [VisitaRepository] respuesta sin id de agenda para $localId');
+        return;
+      }
+      await DatabaseHelper.instance.registrarIdMapping(
+        entityType: scheduleEntityType,
+        localId: localId,
+        serverId: serverId,
+      );
+      print('✅ [VisitaRepository] agenda $localId → server_id $serverId');
+    } catch (e) {
+      print('❌ [VisitaRepository] error mapeando agenda $localId: $e');
+    }
+  }
 
   /// Obtiene todas las visitas guardadas localmente sin filtros
   Future<List<VisitaModel>> getVisitasLocales() async {

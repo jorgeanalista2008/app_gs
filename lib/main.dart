@@ -12,6 +12,7 @@ import 'services/location_tracking_service.dart';
 import 'repositories/cliente_repository.dart';
 import 'repositories/pregunta_repository.dart';
 import 'repositories/asistencia_repository.dart';
+import 'repositories/visita_repository.dart';
 import 'pages/login_page.dart';
 import 'pages/biometric_login_page.dart';
 import 'pages/home_page.dart';
@@ -35,6 +36,7 @@ void main() async {
   PreguntaRepository.registerSyncHandlers();
   LocationTrackingService.registerSyncHandlers();
   AsistenciaRepository.registerSyncHandlers();
+  VisitaRepository.registerSyncHandlers();
   // Arranca el tracker sin depender de sesión. Si no hay permisos aún,
   // el servicio lo detecta y no arranca; se re-intenta al login o cuando
   // el usuario habilite permisos desde ajustes del SO.

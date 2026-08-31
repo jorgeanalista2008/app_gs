@@ -13,7 +13,6 @@ class _BiometricLoginPageState extends State<BiometricLoginPage> {
   late BiometricService _bioService;
   bool _isAuthenticating = false;
   String? _statusMessage;
-  String? _biometricDescription;
   int _failureCount = 0;
   static const int _maxFailures = 3;
 
@@ -35,10 +34,6 @@ class _BiometricLoginPageState extends State<BiometricLoginPage> {
         );
         return;
       }
-
-      // Obtener descripción
-      final description = await _bioService.getBiometricDescription();
-      setState(() => _biometricDescription = description);
 
       // Obtener username guardado
       final username = await _bioService.getSavedBiometricUsername();
@@ -108,7 +103,6 @@ class _BiometricLoginPageState extends State<BiometricLoginPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Login con Biometría'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).pop(),
@@ -146,16 +140,6 @@ class _BiometricLoginPageState extends State<BiometricLoginPage> {
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 8),
-                  if (_biometricDescription != null)
-                    Text(
-                      _biometricDescription!,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
                 ],
               ),
 

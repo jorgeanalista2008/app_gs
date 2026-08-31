@@ -713,8 +713,18 @@ class DatabaseHelper {
     final nowIso = DateTime.now().toUtc().toIso8601String();
 
     for (final visita in visitas) {
-      final id = visita['id']?.toString();
-      if (id == null || id.isEmpty) continue;
+      final serverId = visita['id']?.toString();
+      if (serverId == null || serverId.isEmpty) continue;
+
+      // Una agenda ad-hoc ("Nueva Visita") vive local con id 'visita_<ts>'
+      // hasta que sube; el servidor la devuelve con SU id numérico real.
+      // Sin este reverse-lookup, el `where: 'id = ?'` de abajo nunca
+      // encontraba la fila local (ids distintos) e insertaba una fila
+      // NUEVA con el id del servidor — la visita se veía duplicada:
+      // la original 'visita_<ts>' + su "espejo" recién descargado.
+      final mappedLocalId =
+          await getLocalIdForServerId('visit_schedule', serverId);
+      final id = mappedLocalId ?? serverId;
 
       final existing = await db.query(
         'visitas',
@@ -1109,6 +1119,16 @@ class DatabaseHelper {
     return results.isNotEmpty ? results.first : null;
   }
 
+  /// Obtiene un usuario por username (email). Necesario para login
+  /// biométrico: ahí solo se conoce el username guardado, no el id (UUID),
+  /// y [getUsuario] busca por `id` — buscar por id con un username nunca
+  /// coincide, dejaba el login con huella roto siempre.
+  Future<Map<String, dynamic>?> getUsuarioPorUsername(String username) async {
+    final db = await database;
+    final results = await db.query('usuarios', where: 'username = ?', whereArgs: [username], limit: 1);
+    return results.isNotEmpty ? results.first : null;
+  }
+
   /// Elimina un usuario
   Future<int> eliminarUsuario(String id) async {
     final db = await database;
@@ -1290,6 +1310,25 @@ class DatabaseHelper {
       limit: 1,
     );
     return result.isEmpty ? null : result.first['server_id'] as String?;
+  }
+
+  /// Resuelve un server_id → local_id (inverso de [getServerId]). Se usa al
+  /// descargar del servidor una entidad que puede haber sido creada offline
+  /// primero (ej. agenda ad-hoc): sin esto, el downstream trata el id del
+  /// servidor como "nuevo" y duplica la fila en vez de actualizar la local.
+  Future<String?> getLocalIdForServerId(
+    String entityType,
+    String serverId,
+  ) async {
+    final db = await database;
+    final result = await db.query(
+      'id_mapping',
+      columns: ['local_id'],
+      where: 'entity_type = ? AND server_id = ?',
+      whereArgs: [entityType, serverId],
+      limit: 1,
+    );
+    return result.isEmpty ? null : result.first['local_id'] as String?;
   }
 
   // ═══════════════════════════════════════════

@@ -394,15 +394,16 @@ class SyncService {
             whereArgs: [visitId],
           );
 
-          if (respuestas.isEmpty) {
-            // Si la visita está completada pero no hay respuestas, simplemente la marcamos como sincronizada
-            await _db.marcarVisitaSincronizada(visitId);
-            marcadas++;
-            continue;
-          }
-
-          final respuestaRow = respuestas.first;
-          final answersList = jsonDecode(respuestaRow['respuestas_json'] as String) as List;
+          // Antes: si no había respuestas pendientes, la visita se marcaba
+          // "sincronizada" localmente SIN nunca crearla en el backend — una
+          // visita sin encuesta contestada desaparecía para siempre, nunca
+          // llegaba a `visit_records`. Ahora sigue el mismo camino de abajo
+          // (crea la visita igual, solo que sin loop de respuestas).
+          final Map<String, dynamic>? respuestaRow =
+              respuestas.isNotEmpty ? respuestas.first : null;
+          final answersList = respuestaRow != null
+              ? jsonDecode(respuestaRow['respuestas_json'] as String) as List
+              : <dynamic>[];
 
           // Resolver el customer_id real del servidor y verificar estado de sincronización del cliente
           String rawCustomerId = visitRow['customer_id']?.toString() ?? '';
@@ -442,16 +443,27 @@ class SyncService {
           // 1. Crear el registro de visita en el backend
           final rawScheduleId = int.tryParse(visitId) ?? (double.tryParse(visitId)?.toInt());
           final isAdHocVisit = visitId.toString().startsWith('visita_') || (rawScheduleId != null && rawScheduleId > 2000000);
-          final realScheduleId = isAdHocVisit ? null : rawScheduleId;
+          // Una visita ad-hoc ("Nueva Visita") ya no vive solo local: se
+          // auto-agenda en el servidor al crearse (ver nueva_visita_page.dart
+          // → SyncQueueService entityType 'visit_schedule'). Si ese POST ya
+          // se resolvió, hay un id_mapping local→server que hay que usar
+          // como schedule real para poder completarlo igual que uno agendado
+          // por un admin.
+          final mappedScheduleId = isAdHocVisit
+              ? await _db.getServerId('visit_schedule', visitId)
+              : null;
+          final realScheduleId = isAdHocVisit
+              ? (mappedScheduleId != null ? int.tryParse(mappedScheduleId) : null)
+              : rawScheduleId;
 
-          final visitDate = visitRow['visit_date_from']?.toString() ?? 
-                            (respuestaRow['fecha_creacion']?.toString().substring(0, 10)) ?? 
+          final visitDate = visitRow['visit_date_from']?.toString() ??
+                            (respuestaRow?['fecha_creacion']?.toString().substring(0, 10)) ??
                             DateTime.now().toIso8601String().substring(0, 10);
 
           // Las fotos se suben aparte a /images/upload-base64 y se referencian
           // por id en photo_1_id/photo_2_id (columnas dedicadas en visit_records).
-          final foto1Path = respuestaRow['foto1_path']?.toString();
-          final foto2Path = respuestaRow['foto2_path']?.toString();
+          final foto1Path = respuestaRow?['foto1_path']?.toString();
+          final foto2Path = respuestaRow?['foto2_path']?.toString();
           int? photo1Id;
           int? photo2Id;
           if (foto1Path != null && foto1Path.isNotEmpty) {
@@ -475,14 +487,18 @@ class SyncService {
             'customer_id': effectiveCustomerId,
             if (realScheduleId != null) 'visit_schedule_id': realScheduleId,
             'visit_date': visitDate,
-            'latitude': respuestaRow['lat'] ?? 0.0,
-            'longitude': respuestaRow['lng'] ?? 0.0,
+            'latitude': respuestaRow?['lat'] ?? 0.0,
+            'longitude': respuestaRow?['lng'] ?? 0.0,
             'description': (visitRow['notes'] != null && visitRow['notes'].toString().trim().isNotEmpty)
                 ? visitRow['notes'].toString().trim()
                 : 'Visita realizada',
             'extra_data': {},
             if (photo1Id != null) 'photo_1_id': photo1Id,
             if (photo2Id != null) 'photo_2_id': photo2Id,
+            // Estable entre reintentos (mismo visitId local siempre) — el
+            // backend usa esto para no duplicar la visita si este POST se
+            // reintenta tras un timeout de red.
+            'client_dedup_key': 'app_visit_$visitId',
           };
 
           print('🔍 Sincronizando visita - ID local: $visitId, parsed scheduleId: $realScheduleId');
@@ -558,7 +574,9 @@ class SyncService {
           }
 
           // Marcar localmente como sincronizado
-          await _db.marcarRespuestaSincronizada(respuestaRow['id'] as int);
+          if (respuestaRow != null) {
+            await _db.marcarRespuestaSincronizada(respuestaRow['id'] as int);
+          }
           await _db.marcarVisitaSincronizada(visitId);
           marcadas++;
           print('✅ Sincronización unificada exitosa para la visita $visitId');
@@ -838,6 +856,15 @@ class SyncService {
 
       // Subir visitas completadas
       await marcarTodoSincronizado();
+
+      // Descargar visitas programadas nuevas: este método corre cada 2 min
+      // en background (Timer.periodic en sync_queue_service.dart) y era el
+      // único ciclo automático que NO bajaba schedules nuevas — si el
+      // vendedor tenía la app abierta sin perder conexión, una visita
+      // programada por un admin nunca le llegaba hasta cerrar/abrir la app
+      // o perder y recuperar señal.
+      print('📥 [SyncService] Descargando visitas programadas nuevas...');
+      await descargarDatosFromServer();
 
       print('✅ [SyncService] Intento periódico de subida finalizado.');
     } catch (e) {

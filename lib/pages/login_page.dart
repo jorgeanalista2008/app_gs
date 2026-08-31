@@ -21,7 +21,6 @@ class _LoginPageState extends State<LoginPage> {
   final AuthService _authService = AuthService.instance;
   bool _isLoading = false;
   bool _canUseBiometrics = false;
-  String _biometricMethod = '';
 
   @override
   void initState() {
@@ -37,15 +36,10 @@ class _LoginPageState extends State<LoginPage> {
       final canUse = await bioService.canUseBiometrics;
 
       if (canUse) {
-        // Obtener descripción del método biométrico
-        final description = await bioService.getBiometricDescription();
         if (mounted) {
-          setState(() {
-            _canUseBiometrics = true;
-            _biometricMethod = description;
-          });
+          setState(() => _canUseBiometrics = true);
         }
-        print('✅ [LoginPage] Biometría disponible: $description');
+        print('✅ [LoginPage] Biometría disponible');
       } else {
         if (mounted) {
           setState(() => _canUseBiometrics = false);
@@ -129,6 +123,15 @@ class _LoginPageState extends State<LoginPage> {
         print('Usuario: ${_authService.userName}');
         print('Rol: ${_authService.userRole}');
         print('=====================');
+
+        // Activa login con huella para el próximo inicio de sesión. Antes
+        // nada llamaba a esto en ningún flujo — la huella nunca se
+        // habilitaba, así que el botón de biometría en esta pantalla
+        // siempre fallaba ("usuario no encontrado") sin importar el
+        // dispositivo.
+        if (_canUseBiometrics) {
+          await BiometricService.instance.enableBiometricLogin(usuario);
+        }
 
         LocationTrackingService.instance.start();
 
@@ -297,59 +300,20 @@ class _LoginPageState extends State<LoginPage> {
 
                 const SizedBox(height: 20),
 
-                // Botón de Biometric Login
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: _checkBiometricAndNavigate,
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            side: BorderSide(color: AppColors.primaryColor, width: 2),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          icon: const Icon(
-                            Icons.fingerprint,
-                            size: 24,
-                            color: AppColors.primaryColor,
-                          ),
-                          label: const Text(
-                            'LOGIN CON BIOMETRÍA',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.primaryColor,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      // Badge del método biométrico
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: AppColors.primaryColor.withOpacity(0.3),
-                          ),
-                        ),
-                        child: Text(
-                          '📱 Disponible: $_biometricMethod',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.primaryColor,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
+                // Botón de Biometric Login: solo el ícono, sin texto ni badge.
+                Center(
+                  child: OutlinedButton(
+                    onPressed: _checkBiometricAndNavigate,
+                    style: OutlinedButton.styleFrom(
+                      shape: const CircleBorder(),
+                      padding: const EdgeInsets.all(16),
+                      side: BorderSide(color: AppColors.primaryColor, width: 2),
+                    ),
+                    child: const Icon(
+                      Icons.fingerprint,
+                      size: 32,
+                      color: AppColors.primaryColor,
+                    ),
                   ),
                 ),
 

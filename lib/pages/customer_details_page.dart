@@ -113,38 +113,75 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage>
         throw Exception('Credenciales no disponibles');
       }
 
+      // Antes: un solo Future fallando (timeout, backend lento, 500 en UN
+      // endpoint) tumbaba el `Future.wait` completo y dejaba la pantalla en
+      // blanco con un error genérico, aunque los otros 5 sí hubieran
+      // respondido bien. La UI ya renderiza cada sección con
+      // `if (_dashboard != null)` etc., así que basta con que cada llamada
+      // falle sola (log + null) para que el resto de la pantalla cargue
+      // normal y solo falte la tarjeta puntual que tuvo el problema.
       final results = await Future.wait([
-        _analyticsService.getDashboard(
-          customerId: widget.cliente.id,
-          email: email,
-          password: password,
-        ),
-        _analyticsService.getStats(
-          customerId: widget.cliente.id,
-          email: email,
-          password: password,
-        ),
-        _analyticsService.getLTV(
-          customerId: widget.cliente.id,
-          email: email,
-          password: password,
-        ),
-        _analyticsService.getRFM(
-          customerId: widget.cliente.id,
-          email: email,
-          password: password,
-        ),
-        _analyticsService.getValueMatrix(
-          customerId: widget.cliente.id,
-          email: email,
-          password: password,
-        ),
-        _analyticsService.getTrend(
-          customerId: widget.cliente.id,
-          email: email,
-          password: password,
-          days: 30,
-        ),
+        _analyticsService
+            .getDashboard(
+              customerId: widget.cliente.id,
+              email: email,
+              password: password,
+            )
+            .catchError((e) {
+          print('❌ [Analytics] dashboard falló, sigo sin esa tarjeta: $e');
+          return null;
+        }),
+        _analyticsService
+            .getStats(
+              customerId: widget.cliente.id,
+              email: email,
+              password: password,
+            )
+            .catchError((e) {
+          print('❌ [Analytics] stats falló, sigo sin esa tarjeta: $e');
+          return null;
+        }),
+        _analyticsService
+            .getLTV(
+              customerId: widget.cliente.id,
+              email: email,
+              password: password,
+            )
+            .catchError((e) {
+          print('❌ [Analytics] LTV falló, sigo sin esa tarjeta: $e');
+          return null;
+        }),
+        _analyticsService
+            .getRFM(
+              customerId: widget.cliente.id,
+              email: email,
+              password: password,
+            )
+            .catchError((e) {
+          print('❌ [Analytics] RFM falló, sigo sin esa tarjeta: $e');
+          return null;
+        }),
+        _analyticsService
+            .getValueMatrix(
+              customerId: widget.cliente.id,
+              email: email,
+              password: password,
+            )
+            .catchError((e) {
+          print('❌ [Analytics] value-matrix falló, sigo sin esa tarjeta: $e');
+          return null;
+        }),
+        _analyticsService
+            .getTrend(
+              customerId: widget.cliente.id,
+              email: email,
+              password: password,
+              days: 30,
+            )
+            .catchError((e) {
+          print('❌ [Analytics] trend falló, sigo sin esa tarjeta: $e');
+          return null;
+        }),
       ]);
 
       if (mounted) {
@@ -157,6 +194,12 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage>
           _valueMatrix = results[4] as Map<String, dynamic>?;
           _trend = results[5] as Map<String, dynamic>?;
           _loadingAnalytics = false;
+          // Con degradación parcial, un error real solo aplica si TODO
+          // vino vacío — si algo cargó, no tiene sentido tapar la pantalla
+          // con un banner de error.
+          if (results.every((r) => r == null)) {
+            _errorAnalytics = 'No se pudo cargar la información del cliente';
+          }
         });
       }
     } catch (e) {

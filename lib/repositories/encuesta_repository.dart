@@ -308,7 +308,12 @@ class EncuestaRepository {
         arrayRespuestas.add(respuesta);
       });
 
-      if (arrayRespuestas.isEmpty) return false;
+      // Sin respuestas no es un error: una visita completada sin encuesta
+      // contestada (todas las preguntas opcionales, o el vendedor las dejó
+      // en blanco) sigue siendo una visita válida. Antes esto devolvía
+      // `false`, encuesta_page.dart nunca llamaba a actualizarEstadoVisita,
+      // y la visita se quedaba en PENDING para siempre — nunca subía.
+      if (arrayRespuestas.isEmpty) return true;
 
       final id = await _db.guardarRespuesta(
         visitId: visitId,
